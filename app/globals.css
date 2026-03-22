@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+/* ──────────────────────────────────────────────────
+   Material 3 Expressive – Custom Utilities
+   ────────────────────────────────────────────────── */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+}
+
+/* Print / PDF – hide input chrome */
+@media print {
+  textarea, input, select {
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    outline: none !important;
+  }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: rgba(241, 245, 249, 0.8); border-radius: 10px; }
+::-webkit-scrollbar-thumb { background: rgba(99, 102, 241, 0.35); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(99, 102, 241, 0.6); }
+
+/* Toast slide-in / out */
+@keyframes slide-in {
+  from { transform: translateX(110%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+@keyframes slide-out {
+  from { transform: translateX(0);    opacity: 1; }
+  to   { transform: translateX(110%); opacity: 0; }
+}
+.toast-enter { animation: slide-in 0.35s cubic-bezier(0.34,1.56,0.64,1) forwards; }
+.toast-exit  { animation: slide-out 0.25s ease-in forwards; }
+
+/* Shimmer skeleton */
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+.shimmer {
+  background: linear-gradient(90deg,
+    rgba(148,163,184,0.15) 25%,
+    rgba(148,163,184,0.35) 50%,
+    rgba(148,163,184,0.15) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+/* M3 Expressive – large rounded-[32px] / [28px] via arbitrary values are
+   resolved by Tailwind v4 automatically, no config needed. */
