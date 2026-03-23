@@ -28,9 +28,10 @@ export function generateTimetable(syllabus, startDate, dayConfigs) {
   // ── Normalize syllabus: clone and map to a consistent shape ──
   const remaining = syllabus.map((ls, idx) => ({
     lessonName: ls.name || ls.tenBai || `Bài ${idx + 1}`,
-    periodsLeft: Number(ls.totalPeriods || ls.soTiet || 0),
+    ltLeft: Number(ls.tietLT || 0),
+    thLeft: Number(ls.tietTH || 0),
     originalLesson: ls,
-  })).filter(ls => ls.periodsLeft > 0);
+  })).filter(ls => (ls.ltLeft + ls.thLeft) > 0);
 
   const sessions = [];
   let sessionCounter = 1;
@@ -42,7 +43,6 @@ export function generateTimetable(syllabus, startDate, dayConfigs) {
     const periodsAllowed = dayConfigs[dayOfWeek] || 0;
 
     if (periodsAllowed === 0) {
-      // This day is not a teaching day; advance
       currentDate.setDate(currentDate.getDate() + 1);
       currentDate = advanceToNextValidDay(currentDate);
       continue;
@@ -56,24 +56,37 @@ export function generateTimetable(syllabus, startDate, dayConfigs) {
       const lesson = remaining[0];
       const slotsLeft = periodsAllowed - periodsFilledToday;
       
-      if (lesson.periodsLeft <= slotsLeft) {
-        // Lesson fits completely into this day's remaining slots
+      let ltToTake = 0;
+      let thToTake = 0;
+
+      // 1. Take LT first
+      if (lesson.ltLeft > 0) {
+        ltToTake = Math.min(lesson.ltLeft, slotsLeft);
+        lesson.ltLeft -= ltToTake;
+      }
+
+      // 2. If slots remaining, take TH
+      if (ltToTake < slotsLeft && lesson.thLeft > 0) {
+        thToTake = Math.min(lesson.thLeft, slotsLeft - ltToTake);
+        lesson.thLeft -= thToTake;
+      }
+
+      const totalTaken = ltToTake + thToTake;
+      
+      if (totalTaken > 0) {
         sessionContents.push({
           lessonName: lesson.lessonName,
-          periods: lesson.periodsLeft,
+          periods: totalTaken,
+          tietLT: ltToTake,
+          tietTH: thToTake,
           originalLesson: lesson.originalLesson,
         });
-        periodsFilledToday += lesson.periodsLeft;
-        remaining.shift(); // Remove lesson from queue
-      } else {
-        // Lesson is too long; fill available slots and carry over the rest
-        sessionContents.push({
-          lessonName: `${lesson.lessonName} (phần ${periodsFilledToday + 1})`,
-          periods: slotsLeft,
-          originalLesson: lesson.originalLesson,
-        });
-        lesson.periodsLeft -= slotsLeft; // Update remaining periods
-        periodsFilledToday = periodsAllowed; // Day is now full
+        periodsFilledToday += totalTaken;
+      }
+
+      // If lesson is fully scheduled, remove from queue
+      if (lesson.ltLeft === 0 && lesson.thLeft === 0) {
+        remaining.shift();
       }
     }
 
@@ -89,7 +102,6 @@ export function generateTimetable(syllabus, startDate, dayConfigs) {
       sessionCounter++;
     }
 
-    // Advance to the next valid teaching day
     currentDate.setDate(currentDate.getDate() + 1);
     currentDate = advanceToNextValidDay(currentDate);
   }

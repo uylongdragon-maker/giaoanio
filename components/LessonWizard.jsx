@@ -18,8 +18,25 @@ export default function LessonWizard({ aiConfig, setAiConfig, sessionData, cours
     lessonName: sessionData?.title || '',
     lessonType: 'Lý thuyết',
     totalMinutes: sessionData?.totalMinutes || 45,
+    tietLT: 0,
+    tietTH: 0,
     notes: ''
   });
+
+  // Calculate session-level totals for LT/TH when sessionData changes
+  useEffect(() => {
+    if (sessionData?.contents) {
+      const sumLT = sessionData.contents.reduce((sum, c) => sum + (c.tietLT || 0), 0);
+      const sumTH = sessionData.contents.reduce((sum, c) => sum + (c.tietTH || 0), 0);
+      setLessonData(prev => ({
+        ...prev,
+        tietLT: sumLT,
+        tietTH: sumTH,
+        lessonType: sumLT >= sumTH ? 'Lý thuyết' : 'Thực hành'
+      }));
+    }
+  }, [sessionData]);
+
   const [wizardData, setWizardData] = useState({
     fileSummary: courseData?.syllabusSummary || '',
     competencySettings: { resources: [], competencies: [] },

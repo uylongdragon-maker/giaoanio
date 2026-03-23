@@ -388,11 +388,29 @@ export default function Home() {
                             <h4 className={`text-sm font-black leading-tight line-clamp-2 ${config.text}`}>
                               {session.contents.map(c => c.lessonName).join(' & ')}
                             </h4>
+                            
+                            {/* LT/TH Badges */}
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {session.contents.map((content, idx) => (
+                                <div key={idx} className="flex flex-wrap gap-1">
+                                  {content.tietLT > 0 && (
+                                    <span className="px-1.5 py-0.5 rounded-md bg-blue-500/20 text-blue-200 text-[9px] font-bold border border-blue-400/20 backdrop-blur-sm">
+                                      {content.tietLT} tiết LT
+                                    </span>
+                                  )}
+                                  {content.tietTH > 0 && (
+                                    <span className="px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-200 text-[9px] font-bold border border-amber-400/20 backdrop-blur-sm">
+                                      {content.tietTH} tiết TH/KT
+                                    </span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
                           </div>
 
-                          <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between">
+                          <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between">
                             <span className={`text-[10px] font-bold ${config.sub}`}>
-                              {session.totalPeriods} tiết • {session.totalPeriods * 45} phút
+                              Tổng {session.totalPeriods} tiết • {session.totalPeriods * 45} phút
                             </span>
                             <div className={`w-7 h-7 rounded-full flex items-center justify-center bg-white/5 border border-white/10 group-hover:bg-white/20 transition-all`}>
                               <ArrowRight className="w-3.5 h-3.5 text-white/50" />

@@ -28,14 +28,17 @@ export async function POST(req) {
 
 Hãy đọc TỪ ĐẦU ĐẾN CUỐI toàn bộ HTML này và trích xuất RA TOÀN BỘ CÁC BÀI HỌC.
 Tuyệt đối KHÔNG được tóm tắt. Nếu có 20 bài, phải trích xuất đủ 20 bài.
-Công thức tính số tiết: soTiet = Giờ LT + Math.round((Giờ TH * 60) / 45).
-Nếu không phân biệt LT/TH thì ước lượng hợp lý.
+
+NHIỆM VỤ: Với mỗi bài học, hãy tìm chính xác số liệu ở 3 cột: Giờ Lý thuyết, Giờ Thực hành (hoặc bài tập/thảo luận), Giờ Kiểm tra (hoặc thi).
+Sau đó, tự động chuyển đổi từ GIỜ sang TIẾT theo công thức bắt buộc sau:
+- tietLT (Tiết Lý thuyết) = Số Giờ Lý thuyết.
+- tietTH (Tiết Thực hành & Kiểm tra) = LÀM TRÒN SỐ CỦA: ((Số Giờ Thực hành + Số Giờ Kiểm tra) * 60 / 45).
 
 NỘI DUNG HTML:
 ${fileData.rawText}
 
 BẮT BUỘC trả về ĐÚNG MỘT MẢNG JSON (không có wrapper object, không có markdown):
-[{"tenBai": "Tên bài 1", "soTiet": 3}, {"tenBai": "Tên bài 2", "soTiet": 2}, ...]`;
+[{"tenBai": "Tên bài 1", "tietLT": 2, "tietTH": 1}, {"tenBai": "Tên bài 2", "tietLT": 0, "tietTH": 3}, ...]`;
 
         parts = [{ text: prompt }];
 
@@ -154,12 +157,21 @@ CHỈ TRẢ VỀ DUY NHẤT MỘT ĐỐI TƯỢNG JSON VỚI FORMAT SAU (KHÔNG 
     let finalPrompt = body.promptText;
     
     if (!finalPrompt && mode === 'generate') {
-      finalPrompt = `Bạn là một Chuyên gia Sư phạm xuất sắc. Hãy soạn giáo án chi tiết CHUẨN PHỤ LỤC 10 bài: "${body.formData?.lessonName || 'Bài học'}", loại bài: ${body.formData?.lessonType || 'Lý thuyết'}. Tổng thời gian: ${body.formData?.totalMinutes || 45} phút. Ghi chú: "${body.formData?.notes || 'Không có'}".
-Tài nguyên & Năng lực: ${body.wizardData?.competencies?.join(', ') || 'Chưa định nghĩa'}.
+      const { formData, wizardData } = body;
+      const breakdown = (formData?.tietLT || formData?.tietTH) 
+        ? `Cấu trúc buổi học: ${formData.tietLT || 0} tiết Lý thuyết, ${formData.tietTH || 0} tiết Thực hành/Kiểm tra.`
+        : '';
+
+      finalPrompt = `Bạn là một Chuyên gia Sư phạm xuất sắc. Hãy soạn giáo án chi tiết CHUẨN PHỤ LỤC 10 bài: "${formData?.lessonName || 'Bài học'}", loại bài: ${formData?.lessonType || 'Lý thuyết'}. 
+Tổng thời gian: ${formData?.totalMinutes || 45} phút. ${breakdown}
+Ghi chú: "${formData?.notes || 'Không có'}".
+Tài nguyên & Năng lực: ${wizardData?.competencies?.join(', ') || 'Chưa định nghĩa'}.
 ${chatContext}
 YÊU CẦU CỐT LÕI (BẮT BUỘC TUÂN THỦ 100%):
-1. QUY TẮC "BĂM NHỎ" THỜI GIAN VÀ CHIA BUỔI:
-   - Hãy soạn giáo án cho buổi học: "${body.formData?.lessonName || 'Bài học'}". Tổng quỹ thời gian của buổi này là đúng ${body.formData?.totalMinutes || 45} phút. Tự động tính toán để tổng thời gian các hoạt động BẮT BUỘC bằng đúng ${body.formData?.totalMinutes || 45} phút.
+1. QUY TẮC PHÂN BỔ NỘI DUNG:
+   - Nếu có Tiết Lý thuyết: Tập trung vào truyền đạt kiến thức, dẫn dắt, giải thích.
+   - Nếu có Tiết Thực hành/Kiểm tra: Tập trung vào hoạt động rèn luyện, bài tập, chấm điểm, đánh giá.
+   - Tổng quỹ thời gian của buổi này là đúng ${formData?.totalMinutes || 45} phút. Tự động tính toán để tổng thời gian các hoạt động BẮT BUỘC bằng đúng ${formData?.totalMinutes || 45} phút.
    - Chia thành các hoạt động không quá 15 phút. Tuyệt đối bám sát nội dung và thời gian này.
 2. QUY TẮC PHÂN TIẾT RÕ RÀNG: Trong cột Tên hoạt động ("segmentTitle"), phải ghi rõ hoạt động này thuộc "Tiết 1", "Tiết 2"... tương ứng với số phút đã tính.
 3. QUY TẮC NỘI DUNG: Ghi cực kỳ chi tiết kiến thức chuyên môn sẽ truyền đạt trong ô "detailedContent".

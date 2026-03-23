@@ -92,18 +92,15 @@ export default function CourseUploader({ onCourseAnalyzed, apiKey, modelType }) 
 
       // Map to consistent lesson shape - handle all possible key names from AI
       const processedLessons = data.lessons.map((ls, idx) => {
-        const theoryPeriods = Number(ls.theory ?? ls.lt ?? ls.soTietLT ?? 0);
-        const practicalHours = Number(ls.practical ?? ls.th ?? ls.soGioTH ?? 0);
-        const practicalPeriods = Math.round((practicalHours * 60) / 45);
-        // soTiet may already be the total (from the new prompt format)
-        const totalFromLs = Number(ls.totalPeriods ?? ls.soTiet ?? 0);
-        const total = totalFromLs || (theoryPeriods + practicalPeriods) || 1;
+        const tLT = Number(ls.tietLT ?? ls.lt ?? 0);
+        const tTH = Number(ls.tietTH ?? ls.th ?? ls.soTietTH ?? 0);
+        const total = tLT + tTH || 1;
 
         return {
           id: `lesson-${idx + 1}`,
           name: ls.name || ls.tenBai || `Bài ${idx + 1}`,
-          theoryPeriods,
-          practicalPeriods,
+          tietLT: tLT,
+          tietTH: tTH,
           totalPeriods: total,
           status: 'Chưa soạn'
         };
@@ -164,7 +161,7 @@ export default function CourseUploader({ onCourseAnalyzed, apiKey, modelType }) 
           <div className="flex flex-col items-center gap-3">
             <Loader2 className="w-10 h-10 text-indigo-500 animate-spin" />
             <p className="text-sm text-indigo-700 font-medium">AI đang bóc tách phân phối chương trình...</p>
-            <p className="text-xs text-indigo-500/70">Quy đổi: 1h Lý thuyết = 1 tiết | 1h Thực hành = (1 × 60)/45 tiết</p>
+            <p className="text-xs text-indigo-500/70 text-balance px-4">Quy đổi: Tiết LT = Giờ LT | Tiết TH = (Giờ TH + Giờ KT) × 60/45</p>
           </div>
         ) : file ? (
           <div className="flex flex-col items-center gap-3">

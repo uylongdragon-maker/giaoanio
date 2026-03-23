@@ -90,7 +90,7 @@ export default function LessonForm({ data, onDataChange, isLocked }) {
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="block text-xs font-semibold text-slate-500 mb-2 uppercase tracking-widest">
-            <Clock className="w-3 h-3 inline mr-1" />Giờ lý thuyết
+            <Clock className="w-3 h-3 inline mr-1" />Số tiết lý thuyết
           </label>
           <input
             type="number"
@@ -108,7 +108,7 @@ export default function LessonForm({ data, onDataChange, isLocked }) {
         </div>
         <div>
           <label className="block text-xs font-semibold text-slate-500 mb-2 uppercase tracking-widest">
-            <Clock className="w-3 h-3 inline mr-1" />Giờ thực hành
+            <Clock className="w-3 h-3 inline mr-1" />Số tiết thực hành/KIỂM TRA
           </label>
           <input
             type="number"
