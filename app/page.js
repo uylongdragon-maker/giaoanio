@@ -1,413 +1,427 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import Header from '@/components/Header';
-import LessonForm from '@/components/LessonForm';
-import ActivityCard from '@/components/ActivityCard';
-import ExportButtons from '@/components/ExportButtons';
-import AIConfig from '@/components/AIConfig';
-import AssistantChat from '@/components/AssistantChat';
-import FileUploader from '@/components/FileUploader';
-import CompetencySelector from '@/components/CompetencySelector';
-import SimulationBox from '@/components/SimulationBox';
-import { Sparkles, ChevronRight, ChevronLeft, Bot, Loader2, CheckCircle2, FileText, MonitorSmartphone, Cpu, Presentation } from 'lucide-react';
+import CourseUploader from '@/components/CourseUploader';
+import SchedulingForm from '@/components/SchedulingForm';
+import LessonWizard from '@/components/LessonWizard';
+import SettingsModal from '@/components/SettingsModal';
+import SessionPreviewModal from '@/components/SessionPreviewModal';
+import AILandingConfig from '@/components/AILandingConfig';
+import { UploadCloud, Calendar as CalendarIcon, Zap, CheckCircle2, Clock, ArrowRight, Settings, Library, Loader2, PlayCircle, ArrowLeft } from 'lucide-react';
 
 export default function Home() {
-  const resultRef = useRef(null);
   const [isClient, setIsClient] = useState(false);
-
-  // States
+  
   const [aiConfig, setAiConfig] = useState(null);
-  const [currentStep, setCurrentStep] = useState(1);
-  const [lessonData, setLessonData] = useState(null);
-  const [wizardData, setWizardData] = useState({
-    fileSummary: '',
-    competencySettings: { resources: [], competencies: [] },
-    tech: { tools: '', useAi: true },
-    simulation: { teacherContent: '', studentContent: '' }
-  });
-
-  const [chatHistory, setChatHistory] = useState([]);
-  const [activities, setActivities] = useState([]);
-  const [generatedLesson, setGeneratedLesson] = useState(null);
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [courseData, setCourseData] = useState(null);
+  const [selectedSession, setSelectedSession] = useState(null);
+  const [previewSession, setPreviewSession] = useState(null); // New for Green cards
+  const [showConfig, setShowConfig] = useState(false); 
   const [toast, setToast] = useState(null);
 
-  // Load from localStorage on mount
   useEffect(() => {
     setIsClient(true);
     try {
-      if (localStorage.getItem('giaoan_aiConfig')) setAiConfig(JSON.parse(localStorage.getItem('giaoan_aiConfig')));
-      if (localStorage.getItem('giaoan_lessonData')) setLessonData(JSON.parse(localStorage.getItem('giaoan_lessonData')));
-      if (localStorage.getItem('giaoan_wizardData')) setWizardData(JSON.parse(localStorage.getItem('giaoan_wizardData')));
-      if (localStorage.getItem('giaoan_currentStep')) setCurrentStep(Number(localStorage.getItem('giaoan_currentStep')));
-      if (localStorage.getItem('giaoan_activities')) setActivities(JSON.parse(localStorage.getItem('giaoan_activities')));
-      if (localStorage.getItem('giaoan_generatedLesson')) setGeneratedLesson(JSON.parse(localStorage.getItem('giaoan_generatedLesson')));
+      const storedConfig = localStorage.getItem('giao_an_io_config');
+      if (storedConfig) setAiConfig(JSON.parse(storedConfig));
+      
+      const storedCourse = localStorage.getItem('courseTimetable');
+      if (storedCourse) setCourseData(JSON.parse(storedCourse));
     } catch (e) {
       console.warn("Storage parse error", e);
     }
   }, []);
 
-  // Save to localStorage broadly
   useEffect(() => {
     if (!isClient) return;
-    if (aiConfig) localStorage.setItem('giaoan_aiConfig', JSON.stringify(aiConfig));
-    if (lessonData) localStorage.setItem('giaoan_lessonData', JSON.stringify(lessonData));
-    if (wizardData) localStorage.setItem('giaoan_wizardData', JSON.stringify(wizardData));
-    localStorage.setItem('giaoan_currentStep', currentStep.toString());
-    localStorage.setItem('giaoan_activities', JSON.stringify(activities));
-    if (generatedLesson) localStorage.setItem('giaoan_generatedLesson', JSON.stringify(generatedLesson));
-  }, [aiConfig, lessonData, wizardData, currentStep, activities, generatedLesson, isClient]);
+    if (aiConfig) localStorage.setItem('giao_an_io_config', JSON.stringify(aiConfig));
+    if (courseData) localStorage.setItem('courseTimetable', JSON.stringify(courseData));
+  }, [aiConfig, courseData, isClient]);
+
+  const handleCourseAnalyzed = (lessons) => {
+    setCourseData({ lessons, schedule: null });
+  };
+
+  const handleScheduleComplete = (sessions) => {
+    setCourseData(prev => ({ ...prev, schedule: sessions }));
+  };
+
+  const handleWizardComplete = (sessionId, generatedLesson, wizardData) => {
+    setCourseData(prev => {
+      const updatedSchedule = prev.schedule.map(sess => {
+        if (sess.id === sessionId) {
+          return { ...sess, status: 'completed', generatedLesson, wizardData };
+        }
+        return sess;
+      });
+      return { ...prev, schedule: updatedSchedule };
+    });
+    
+    // Đóng Modal
+    setSelectedSession(null);
+  };
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
-    setTimeout(() => setToast(null), 3500);
+    setTimeout(() => setToast(null), 3000);
   };
 
-  const handleConfigSaved = (config) => {
-    setAiConfig(config);
-    showToast('💾 Đã lưu cấu hình AI của bạn!', 'success');
-  };
-
-  const nextStep = () => setCurrentStep(prev => Math.min(prev + 1, 6));
-  const prevStep = () => setCurrentStep(prev => Math.max(prev - 1, 1));
-
-  const handleGenerate = async () => {
-    if (!aiConfig?.apiKey?.trim() || !lessonData?.lessonName?.trim()) {
-      showToast('❌ Vui lòng nhập đủ API Key và Thông tin bài học ở các bước trước!', 'error');
-      setCurrentStep(2);
-      return;
-    }
-
-    setIsGenerating(true);
-    setActivities([]);
-    setGeneratedLesson(null);
-
-    try {
-      const response = await fetch('/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          apiKey: aiConfig.apiKey,
-          modelType: aiConfig.modelType || 'gemini-3-flash-preview',
-          mode: 'generate',
-          formData: lessonData,
-          wizardData,
-          chatHistory
-        }),
-      });
-
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || `Lỗi server: ${response.status}`);
-      
-      let rawOutput = data.result;
-      if (!rawOutput) throw new Error('AI không trả về dữ liệu hợp lệ. Vui lòng thử lại.');
-
-      let cleanJson = "";
-      try {
-        cleanJson = rawOutput.replace(/```json\n?|```/g, '').trim();
-        const startObject = cleanJson.indexOf('{');
-        const endObject = cleanJson.lastIndexOf('}');
-        if (startObject !== -1 && endObject !== -1) {
-          cleanJson = cleanJson.substring(startObject, endObject + 1);
-        }
-      } catch (filterError) {
-        console.error("Lỗi khi lọc chuỗi:", filterError);
-      }
-
-      try {
-        const parsedLesson = JSON.parse(cleanJson);
-        if (!parsedLesson.activities || !Array.isArray(parsedLesson.activities)) {
-          throw new Error("Dữ liệu trả về không chứa mảng các hoạt động giáo án.");
-        }
-        
-        if (wizardData.simulation.teacherContent) {
-          const simTime = "5 phút";
-          parsedLesson.activities.push({
-            segmentTitle: "Tình huống phụ trợ (Từ AI Co-pilot)",
-            time: simTime,
-            detailedContent: "Phát sinh tình huống tương tác do AI hỗ trợ lên kịch bản",
-            teacherActions: wizardData.simulation.teacherContent,
-            studentActions: wizardData.simulation.studentContent
-          });
-        }
-
-        setGeneratedLesson(parsedLesson);
-        setActivities(parsedLesson.activities); 
-        
-        setTimeout(() => resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
-        showToast(`✅ Đã đúc thành công giáo án chuẩn Phụ lục 10!`, 'success');
-
-      } catch (parseError) {
-        console.error("Lỗi Parse JSON:", cleanJson);
-        showToast(`AI trả về dữ liệu lỗi định dạng. Bạn hãy ấn "Tạo lại" nhé!`, 'error'); 
-      }
-    } catch (err) {
-      console.error('Generate error:', err);
-      showToast(`❌ ${err.message}`, 'error');
-    } finally {
-      setIsGenerating(false);
+  const clearCourse = () => {
+    if (confirm("Bạn có chắc muốn xóa lịch trình hiện tại và tạo lại từ đầu?")) {
+      setCourseData(null);
+      localStorage.removeItem('courseTimetable');
     }
   };
 
-  const stepsInfo = [
-    { title: 'Tài liệu Nguồn', icon: FileText },
-    { title: 'Thông tin chung', icon: "/icons/pen-tool" }, // Using inline svg placeholder for mapping dynamically if preferred
-    { title: 'Tài nguyên & Năng lực', icon: Cpu },
-    { title: 'Công nghệ & Tích hợp', icon: MonitorSmartphone },
-    { title: 'AI Co-pilot (Mô phỏng)', icon: Bot },
-    { title: 'Tổng hợp & Xuất bản', icon: Presentation }
-  ];
-
-  const totalRequiredMinutes = lessonData?.totalMinutes || 0;
-  const allocatedMinutes = activities.reduce((sum, act) => sum + (parseInt(act.time) || 0), 0);
-  const isTimeValid = allocatedMinutes >= totalRequiredMinutes;
-  const progressPercent = totalRequiredMinutes > 0 ? Math.min(100, (allocatedMinutes / totalRequiredMinutes) * 100) : 0;
+  // Định dạng ngày theo yêu cầu: Thứ X, DD/MM/YYYY
+  const formatDate = (dateString) => {
+    const d = new Date(dateString);
+    const dayOfWeekStr = d.toLocaleDateString('vi-VN', { weekday: 'long' });
+    const capitalizedDay = dayOfWeekStr.charAt(0).toUpperCase() + dayOfWeekStr.slice(1);
+    const dateStr = d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    return `${capitalizedDay}, ${dateStr}`;
+  };
 
   if (!isClient) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
       </div>
     );
   }
 
+  // --- BENTO GRID COMPUTATIONS ---
+  let totalPeriods = 0;
+  let completedPeriods = 0;
+  let totalSessions = 0;
+  let completedSessions = 0;
+  let upNextSession = null;
+  let countCompleted = 0;
+  let countWarning = 0;
+  let countPending = 0;
+
+  if (courseData && courseData.schedule) {
+    totalSessions = courseData.schedule.length;
+    const now = new Date('2026-03-23T00:17:29'); // Use provided current time
+
+    courseData.schedule.forEach(s => {
+      totalPeriods += (s.totalPeriods || 0);
+      
+      const sessionDate = new Date(s.date);
+      const diffTime = sessionDate - now;
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      if (s.status === 'completed') {
+        completedPeriods += (s.totalPeriods || 0);
+        completedSessions++;
+        countCompleted++;
+      } else {
+        if (diffDays <= 2) {
+          countWarning++;
+        } else {
+          countPending++;
+        }
+        if (!upNextSession) upNextSession = s;
+      }
+    });
+  }
+
+  const progressPercent = totalPeriods > 0 ? (completedPeriods / totalPeriods) * 100 : 0;
+
+  // --- RENDER LOGIC ---
+  if (!aiConfig) {
+    return <AILandingConfig onComplete={setAiConfig} />;
+  }
+
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans selection:bg-indigo-100 selection:text-indigo-900 pb-12">
-      <Header />
+    <div className="min-h-screen relative font-sans text-slate-100 overflow-x-hidden bg-[#0B0F19]">
+      {/* Cảnh nền động Glassmorphism - Cosmic Gradient */}
+      <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] bg-indigo-600/20 rounded-full blur-[120px] mix-blend-screen animate-blob"></div>
+        <div className="absolute top-[30%] right-[-10%] w-[40vw] h-[40vw] bg-violet-600/20 rounded-full blur-[100px] mix-blend-screen animate-blob animation-delay-2000"></div>
+        <div className="absolute bottom-[-20%] left-[20%] w-[60vw] h-[60vw] bg-emerald-600/10 rounded-full blur-[150px] mix-blend-screen animate-blob animation-delay-4000"></div>
+      </div>
 
-      {toast && (
-        <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[999] animate-slide-down px-6 py-3 rounded-full flex items-center gap-2 shadow-lg ${toast.type === 'error' ? 'bg-rose-500 text-white shadow-rose-200' : 'bg-emerald-500 text-white shadow-emerald-200'}`}>
-          <div className="text-sm font-semibold">{toast.message}</div>
-        </div>
-      )}
-
-      <main className="max-w-7xl mx-auto w-full px-4">
-        
-        {/* === STEPPER HEADER === */}
-        <div className="bg-white/70 backdrop-blur-2xl border border-white/80 shadow-sm rounded-3xl p-4 md:p-6 mt-6 mb-6 overflow-x-auto hide-scrollbar">
-          <div className="flex justify-between items-center min-w-[700px]">
-            {stepsInfo.map((step, idx) => {
-              const Icon = typeof step.icon === 'string' ? Sparkles : step.icon;
-              const isActive = currentStep === idx + 1;
-              const isPast = currentStep > idx + 1;
-              return (
-                <div key={idx} className="flex flex-col items-center gap-2 flex-1 relative z-10">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 shadow-sm ${
-                    isActive ? 'bg-indigo-600 text-white ring-4 ring-indigo-100 scale-110' :
-                    isPast ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-400'
-                  }`}>
-                    {isPast ? <CheckCircle2 className="w-5 h-5" /> : <Icon className="w-5 h-5" />}
-                  </div>
-                  <span className={`text-xs font-bold text-center mt-1 transition-colors ${isActive ? 'text-indigo-700' : isPast ? 'text-emerald-600' : 'text-slate-400'}`}>
-                    Bước {idx + 1}<br/><span className="font-medium">{step.title}</span>
-                  </span>
-                  {idx < 5 && (
-                    <div className={`hidden md:block absolute top-5 left-[60%] w-[80%] h-0.5 -z-10 ${isPast ? 'bg-emerald-500' : 'bg-slate-200'}`} />
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* === MAIN WORKFLOW CONTENT === */}
-        <div className="flex flex-col xl:grid xl:grid-cols-12 gap-8">
-          
-          <div className="xl:col-span-7 space-y-6">
-            
-            <AIConfig config={aiConfig} onConfigSaved={handleConfigSaved} />
-
-            {currentStep === 1 && (
-              <div className="animate-fade-in">
-                <FileUploader 
-                  apiKey={aiConfig?.apiKey} 
-                  modelType={aiConfig?.modelType}
-                  onFileSummarized={(summary) => setWizardData({...wizardData, fileSummary: summary})} 
-                />
-              </div>
-            )}
-
-            {currentStep === 2 && (
-              <div className="animate-fade-in">
-                {wizardData.fileSummary && (
-                  <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 mb-4">
-                    <p className="text-xs text-emerald-800 font-medium">✨ AI gợi ý từ tài liệu: {wizardData.fileSummary}</p>
-                  </div>
-                )}
-                <LessonForm onDataChange={setLessonData} />
-              </div>
-            )}
-
-            {currentStep === 3 && (
-              <div className="animate-fade-in">
-                <CompetencySelector 
-                  settings={wizardData.competencySettings} 
-                  onChange={(cmd) => setWizardData({...wizardData, competencySettings: cmd})} 
-                />
-              </div>
-            )}
-
-            {currentStep === 4 && (
-              <div className="bg-white/70 backdrop-blur-xl rounded-[28px] p-6 shadow-sm border border-white/80 animate-fade-in">
-                <h2 className="font-bold text-slate-800 mb-4 text-sm">Công nghệ sử dụng</h2>
-                <input
-                  type="text"
-                  placeholder="Nhập tên ứng dụng (VD: Kahoot, Quizizz, Padlet...)"
-                  className="w-full bg-slate-100/80 border-none rounded-2xl px-5 py-4 focus:ring-2 focus:ring-indigo-500 text-sm text-slate-800 mb-6"
-                  value={wizardData.tech.tools}
-                  onChange={e => setWizardData({...wizardData, tech: {...wizardData.tech, tools: e.target.value}})}
-                />
-                <div className="flex items-center justify-between bg-indigo-50 rounded-2xl px-5 py-4 border border-indigo-100">
-                  <div>
-                    <h3 className="font-bold text-indigo-900 text-sm">Ứng dụng AI vào giảng dạy</h3>
-                    <p className="text-xs text-indigo-600 mt-1">AI gợi ý cách áp dụng công cụ thông minh vào lớp học</p>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" className="sr-only peer" checked={wizardData.tech.useAi} onChange={e => setWizardData({...wizardData, tech: {...wizardData.tech, useAi: e.target.checked}})} />
-                    <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-                  </label>
-                </div>
-              </div>
-            )}
-
-            {currentStep === 5 && (
-              <div className="animate-fade-in">
-                <SimulationBox 
-                  apiKey={aiConfig?.apiKey} 
-                  modelType={aiConfig?.modelType}
-                  lessonData={lessonData}
-                  onApplySimulation={(content) => {
-                    setWizardData({...wizardData, simulation: content});
-                    showToast('✅ Đã lưu kịch bản mô phỏng để gộp vào Phụ lục 10', 'success');
-                  }}
-                />
-              </div>
-            )}
-
-            {currentStep === 6 && (
-              <div className="bg-indigo-600 rounded-[28px] p-6 md:p-8 flex flex-col items-center justify-center text-center shadow-lg shadow-indigo-200 animate-fade-in">
-                <Sparkles className="w-12 h-12 text-indigo-300 mb-4" />
-                <h2 className="text-white font-black text-xl mb-2">Sẵn sàng Đúc Giáo án</h2>
-                <p className="text-indigo-100 text-sm mb-6 max-w-sm">
-                  Dữ liệu từ File nguồn, năng lực, ứng dụng công nghệ và mô phỏng đã gom đủ.
-                </p>
-                <button
-                  onClick={handleGenerate}
-                  disabled={isGenerating || !aiConfig?.apiKey}
-                  className="w-full sm:w-auto bg-white hover:bg-indigo-50 text-indigo-600 font-black py-4 px-8 rounded-full shadow-xl transition-transform hover:-translate-y-1 disabled:opacity-50 disabled:transform-none flex items-center justify-center gap-3"
-                >
-                  {isGenerating ? (
-                    <><Loader2 className="w-5 h-5 animate-spin" /> Đang nấu JSON & Đúc Word...</>
-                  ) : (
-                    <><Bot className="w-5 h-5" /> Đúc Giáo Án Phụ Lục 10</>
-                  )}
-                </button>
-              </div>
-            )}
-
-            <div className="flex justify-between items-center bg-white/50 backdrop-blur-md rounded-2xl p-4 shadow-sm border border-slate-100">
-              <button
-                onClick={prevStep}
-                disabled={currentStep === 1}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm text-slate-600 hover:bg-slate-200 disabled:opacity-40 transition-colors"
-              >
-                <ChevronLeft className="w-4 h-4" /> Quay lại
-              </button>
-              
-              {currentStep < 6 ? (
-                <button
-                  onClick={nextStep}
-                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-200 transition-all hover:scale-105"
-                >
-                  Tiếp tục <ChevronRight className="w-4 h-4" />
-                </button>
-              ) : null}
-            </div>
-
-            {currentStep === 6 && generatedLesson && (
-              <div ref={resultRef} className="pt-8 animate-slide-up">
-                <div className="flex items-center gap-3 mb-6 px-2">
-                  <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
-                    <Sparkles className="w-5 h-5 text-emerald-600" />
-                  </div>
-                  <div>
-                    <h2 className="text-2xl font-black text-slate-800">Bản Trình Bày (Preview)</h2>
-                    <p className="text-sm font-medium text-slate-500">Kéo xuống cuối để Xuất file Word Phụ lục 10</p>
-                  </div>
-                </div>
-
-                {/* Progress Bar (Time Allocation Validation) */}
-                <div className="bg-white/70 backdrop-blur-xl rounded-[28px] p-6 shadow-sm border border-slate-100 mb-6">
-                  <div className="flex justify-between items-end mb-3">
-                    <div>
-                      <h3 className="text-sm font-bold text-slate-800 tracking-wide uppercase">Phân bổ Thời gian</h3>
-                      <p className="text-xs text-slate-500 mt-1">
-                        Đã phân bổ: <strong className={isTimeValid ? 'text-emerald-600' : 'text-rose-600'}>{allocatedMinutes} phút</strong> / Tổng: <strong>{totalRequiredMinutes} phút</strong>
-                      </p>
-                    </div>
-                    <span className={`text-2xl font-black ${isTimeValid ? 'text-emerald-600' : 'text-rose-600'}`}>
-                      {Math.round(progressPercent)}%
-                    </span>
-                  </div>
-                  <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden">
-                    <div 
-                      className={`h-full rounded-full transition-all duration-1000 ${isTimeValid ? 'bg-emerald-500' : 'bg-rose-500'}`} 
-                      style={{ width: `${progressPercent}%` }}
-                    />
-                  </div>
-                  {!isTimeValid && (
-                    <p className="text-xs text-rose-500 mt-3 font-medium">⚠️ Cảnh báo: AI phân bổ thiếu thời gian. Bạn có thể quay lại Bước 5 để nhắc AI hoặc xuất luôn và tự bù giờ bằng tay.</p>
-                  )}
-                  {isTimeValid && allocatedMinutes > totalRequiredMinutes && (
-                    <p className="text-xs text-amber-500 mt-3 font-medium">⚠️ Cảnh báo: AI phân bổ hơi lố thời gian (Vượt quá tổng yêu cầu). Bạn nên check lại thẻ cuối.</p>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 2xl:grid-cols-2 gap-6 pb-8">
-                  {activities.map((act, index) => (
-                    <ActivityCard
-                      key={index}
-                      index={index}
-                      activity={act}
-                    />
-                  ))}
-                </div>
-
-                <div className="border-t border-slate-200 mt-4 pt-8">
-                  <ExportButtons 
-                    activities={activities} 
-                    lessonData={lessonData} 
-                    generatedLesson={generatedLesson} 
-                    isTimeValid={isTimeValid}
-                  />
-                </div>
-              </div>
-            )}
-
-          </div>
-
-          <div className="xl:col-span-5 hidden xl:block">
-            <div className="sticky top-6">
-              <AssistantChat 
-                lessonData={lessonData} 
-                apiKey={aiConfig?.apiKey} 
-                modelType={aiConfig?.modelType}
-                onChatUpdate={setChatHistory}
+      {/* FIXED LESSON WIZARD MODAL (FULLSCREEN OVERLAY) */}
+      {selectedSession && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-2xl p-4 md:p-6 overflow-y-auto">
+          <div className="w-full h-full max-w-7xl mx-auto rounded-[32px] overflow-hidden shadow-2xl animate-fade-in flex flex-col bg-white/90">
+            <div className="flex-1 overflow-y-auto w-full h-full relative p-6">
+              <LessonWizard 
+                aiConfig={aiConfig}
+                setAiConfig={setAiConfig}
+                sessionData={{
+                  id: selectedSession.id,
+                  title: selectedSession.contents.map(c => {
+                    const isPartial = c.originalLesson && c.periods < (c.originalLesson.totalPeriods || c.originalLesson.soTiet || 0);
+                    return isPartial ? `${c.lessonName} (một phần)` : c.lessonName;
+                  }).join(' & '),
+                  periods: selectedSession.totalPeriods,
+                  totalMinutes: selectedSession.totalPeriods * 45
+                }}
+                courseData={courseData}
+                onComplete={handleWizardComplete}
+                onCancel={() => setSelectedSession(null)}
               />
             </div>
           </div>
-          <div className="xl:hidden mt-6">
-            <AssistantChat 
-              lessonData={lessonData} 
-              apiKey={aiConfig?.apiKey} 
-              modelType={aiConfig?.modelType}
-              onChatUpdate={setChatHistory}
-            />
-          </div>
-
         </div>
-      </main>
+      )}
+
+      {/* AI CONFIG MODAL (RE-CONFIGURE) */}
+      <SettingsModal 
+        isOpen={showConfig} 
+        onClose={() => setShowConfig(false)}
+        aiConfig={aiConfig}
+        setAiConfig={setAiConfig}
+        showToast={showToast}
+      />
+
+      <SessionPreviewModal
+        isOpen={!!previewSession}
+        onClose={() => setPreviewSession(null)}
+        session={previewSession}
+      />
+
+      {/* MAIN CONTENT LAYER */}
+      <div className="relative z-10 min-h-screen">
+        <Header />
+
+        <main className="max-w-7xl mx-auto w-full px-4 pt-6 pb-20">
+          <div className="animate-fade-in">
+            
+            {/* NO COURSE STATE: Upload / Setup */}
+            {!courseData && (
+              <div className="max-w-3xl mx-auto mt-12 bg-white/10 backdrop-blur-3xl rounded-[32px] p-2 border border-white/10 shadow-[0_8px_32px_rgb(0,0,0,0.3)]">
+                <CourseUploader apiKey={aiConfig?.apiKey} modelType={aiConfig?.modelType} onCourseAnalyzed={handleCourseAnalyzed} />
+              </div>
+            )}
+
+            {/* HAS COURSE BUT NO SCHEDULE: Schedule Config */}
+            {courseData && !courseData.schedule && (
+              <div className="max-w-3xl mx-auto mt-12 bg-white/10 backdrop-blur-3xl rounded-[32px] p-2 border border-white/10 shadow-[0_8px_32px_rgb(0,0,0,0.3)]">
+                <SchedulingForm lessons={courseData.lessons} onScheduleComplete={handleScheduleComplete} />
+              </div>
+            )}
+
+            {/* CONTROL CENTER BENTO GRID */}
+            {courseData && courseData.schedule && (
+              <div className="flex flex-col gap-6">
+                
+                {/* DÒNG 1: BENTO WIDGETS */}
+                <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                  
+                  {/* WIDGET 1: OVERVIEW & STATS (Span 2) */}
+                  <div className="md:col-span-2 lg:col-span-2 bg-white/5 backdrop-blur-2xl rounded-[32px] border border-white/10 shadow-[0_8px_32px_rgb(0,0,0,0.2)] p-6 md:p-8 flex flex-col justify-between overflow-hidden relative group">
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/20 rounded-full blur-[80px] -translate-y-1/2 translate-x-1/3 group-hover:bg-indigo-500/30 transition-all duration-700"></div>
+                    <div className="relative z-10">
+                      <h2 className="text-3xl font-black text-white tracking-tight mb-1">Xin chào, Thầy/Cô! 👋</h2>
+                      <p className="text-slate-400 text-sm font-medium mb-8">Trung tâm điều khiển Smart Timetable</p>
+                      
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-end text-sm">
+                          <span className="font-bold text-slate-300">Tiến độ học kỳ</span>
+                          <span className="font-black text-indigo-400 text-lg">{completedPeriods}/{totalPeriods} <span className="text-xs font-normal text-slate-500">tiết</span></span>
+                        </div>
+                        <div className="w-full bg-slate-800/50 h-3 rounded-full overflow-hidden border border-white/5">
+                          <div 
+                            className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 rounded-full transition-all duration-1000 relative overflow-hidden" 
+                            style={{ width: `${progressPercent}%` }}
+                          >
+                            <div className="absolute top-0 inset-x-0 h-full w-full bg-white/20 -skew-x-12 -translate-x-full group-hover:animate-[shimmer_2s_infinite]"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 mt-8 relative z-10">
+                      <div className="bg-white/5 rounded-2xl p-4 border border-white/5 flex flex-col items-center justify-center">
+                        <span className="text-3xl font-black text-white leading-none mb-1">{totalSessions}</span>
+                        <span className="text-[10px] uppercase font-bold text-slate-400 tracking-widest text-center">Tổng số<br/>Giáo án</span>
+                      </div>
+                      <div className="bg-white/5 rounded-2xl p-4 border border-white/5 flex flex-col items-center justify-center">
+                        <span className="text-3xl font-black text-emerald-400 leading-none mb-1">{completedSessions}</span>
+                        <span className="text-[10px] uppercase font-bold text-emerald-600 tracking-widest text-center">Đã Đúc<br/>Hoàn tất</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* WIDGET 2: UP NEXT (Span 1) */}
+                  <div className="md:col-span-1 lg:col-span-1 bg-gradient-to-br from-indigo-900/40 to-slate-900/40 backdrop-blur-2xl rounded-[32px] border border-indigo-500/30 shadow-[0_8px_32px_rgb(0,0,0,0.3)] p-6 flex flex-col justify-between relative overflow-hidden ring-1 ring-inset ring-white/10">
+                    <div className="absolute -top-10 -right-10 w-32 h-32 bg-indigo-500/40 rounded-full blur-[50px]"></div>
+                    <div className="relative z-10 flex items-center gap-2 mb-4">
+                      <div className="w-8 h-8 rounded-full bg-indigo-500/20 flex items-center justify-center border border-indigo-400/30">
+                        <PlayCircle className="w-4 h-4 text-indigo-400" />
+                      </div>
+                      <span className="text-xs font-black text-indigo-300 uppercase tracking-widest">Up Next</span>
+                    </div>
+
+                    {upNextSession ? (
+                      <div className="relative z-10 mt-auto flex flex-col h-full justify-between">
+                        <div>
+                          <p className="text-xs font-bold text-slate-400 mb-2">{formatDate(upNextSession.date)}</p>
+                          <h3 className="font-bold text-white text-base leading-snug line-clamp-3 mb-4">
+                            {upNextSession.contents.map(c => c.lessonName).join(' & ')}
+                          </h3>
+                        </div>
+                        <button 
+                          onClick={() => setSelectedSession(upNextSession)}
+                          className="w-full mt-4 bg-indigo-500 hover:bg-indigo-400 text-white font-black py-4 rounded-2xl shadow-[0_0_20px_rgba(99,102,241,0.4)] transition-all active:scale-95 flex items-center justify-center gap-2 group relative overflow-hidden"
+                        >
+                          {/* Pulse effect background */}
+                          <div className="absolute inset-0 bg-white/20 rounded-2xl animate-pulse"></div>
+                          <Zap className="w-5 h-5 text-indigo-100 relative z-10 group-hover:scale-110 transition-transform" /> 
+                          <span className="relative z-10">Soạn Nhanh</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="relative z-10 mt-auto text-center py-6">
+                        <CheckCircle2 className="w-12 h-12 text-emerald-500/50 mx-auto mb-3" />
+                        <p className="text-sm font-bold text-slate-300">Đã hoàn thành toàn bộ!</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* WIDGET 3: QUICK ACTIONS (Span 1) */}
+                  <div className="md:col-span-3 lg:col-span-1 grid grid-cols-3 lg:grid-cols-1 gap-4">
+                    <button 
+                      onClick={clearCourse}
+                      className="bg-white/5 hover:bg-white/10 backdrop-blur-2xl rounded-[24px] border border-white/5 shadow-glass p-4 flex flex-col items-center justify-center gap-2 transition-all active:scale-95 group"
+                    >
+                      <div className="w-12 h-12 rounded-full bg-rose-500/10 flex items-center justify-center group-hover:bg-rose-500/20 transition-colors">
+                        <UploadCloud className="w-5 h-5 text-rose-400" />
+                      </div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider text-center leading-tight mt-1">Hủy &<br/>Upload Lại</span>
+                    </button>
+
+                    <button 
+                      onClick={() => setShowConfig(true)}
+                      className="bg-white/5 hover:bg-white/10 backdrop-blur-2xl rounded-[24px] border border-white/5 shadow-glass p-4 flex flex-col items-center justify-center gap-2 transition-all active:scale-95 group"
+                    >
+                      <div className="w-12 h-12 rounded-full bg-slate-500/10 flex items-center justify-center group-hover:bg-slate-500/20 transition-colors">
+                        <Settings className="w-5 h-5 text-slate-300" />
+                      </div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider text-center leading-tight mt-1">Cài đặt<br/>AI</span>
+                    </button>
+
+                    <button 
+                      onClick={() => alert("Thư viện giáo án đang được hoàn thiện.")}
+                      className="bg-white/5 hover:bg-white/10 backdrop-blur-2xl rounded-[24px] border border-white/5 shadow-glass p-4 flex flex-col items-center justify-center gap-2 transition-all active:scale-95 group"
+                    >
+                      <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors">
+                        <Library className="w-5 h-5 text-emerald-400" />
+                      </div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider text-center leading-tight mt-1">Thư viện<br/>Giáo án</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* DÒNG 2: SMART HUB CALENDAR GRID */}
+                <div className="bg-white/5 backdrop-blur-2xl rounded-[32px] border border-white/10 shadow-[0_8px_32px_rgb(0,0,0,0.2)] p-6 md:p-8 mt-4 overflow-hidden relative">
+                  <div className="flex items-center justify-between mb-8">
+                    <div className="flex items-center gap-3">
+                      <CalendarIcon className="w-6 h-6 text-indigo-400" />
+                      <h2 className="text-xl font-black text-white tracking-tight uppercase">Smart Hub Calendar</h2>
+                    </div>
+                    <div className="flex items-center gap-6 text-[10px] font-black uppercase tracking-widest bg-white/5 px-6 py-3 rounded-full border border-white/10 group-hover:bg-white/10 transition-colors">
+                      <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div> {countCompleted} Hoạt động</div>
+                      <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-orange-500 animate-pulse shadow-[0_0_8px_rgba(249,115,22,0.5)]"></div> {countWarning} Cần chú ý</div>
+                      <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-slate-500"></div> {countPending} Chờ xử lý</div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-4">
+                    {courseData.schedule.map((session, idx) => {
+                      const sessionDate = new Date(session.date);
+                      const now = new Date('2026-03-23T00:17:29');
+                      const diffDays = Math.ceil((sessionDate - now) / (1000 * 60 * 60 * 24));
+                      
+                      let status = "pending";
+                      if (session.status === 'completed') status = "completed";
+                      else if (diffDays <= 2) status = "warning";
+
+                      const config = {
+                        completed: {
+                          card: "bg-emerald-500/10 border-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.2)]",
+                          icon: <CheckCircle2 className="w-5 h-5 text-emerald-400" />,
+                          text: "text-emerald-100",
+                          sub: "text-emerald-500/70",
+                          label: "Đã hoàn tất"
+                        },
+                        warning: {
+                          card: "bg-orange-500/15 border-orange-500/50 shadow-[0_0_20px_rgba(249,115,22,0.3)] animate-pulse",
+                          icon: <Zap className="w-5 h-5 text-orange-400" />,
+                          text: "text-orange-100",
+                          sub: "text-orange-500/70",
+                          label: "Cần chú ý"
+                        },
+                        pending: {
+                          card: "bg-white/5 border-white/10 hover:bg-white/10 hover:-translate-y-1 transition-all",
+                          icon: <Clock className="w-5 h-5 text-slate-500" />,
+                          text: "text-slate-300",
+                          sub: "text-slate-500",
+                          label: "Chờ xử lý"
+                        }
+                      }[status] || { card: "", icon: null, text: "", sub: "", label: "" };
+
+                      return (
+                        <div 
+                          key={session.id}
+                          onClick={() => {
+                            if (status === 'completed') setPreviewSession(session);
+                            else setSelectedSession(session);
+                          }}
+                          className={`group relative backdrop-blur-xl rounded-[28px] border p-5 cursor-pointer flex flex-col justify-between overflow-hidden transition-all active:scale-[0.98] ${config.card}`}
+                        >
+                          <div className="flex justify-between items-start mb-4">
+                            <div className={`p-2 rounded-2xl bg-white/5 border border-white/10`}>
+                              {config.icon}
+                            </div>
+                            <span className={`text-[10px] font-black uppercase tracking-tighter opacity-70 ${config.sub}`}>{config.label}</span>
+                          </div>
+                          
+                          <div className="flex-1">
+                            <p className={`text-[11px] font-bold uppercase tracking-widest mb-1 ${config.sub}`}>
+                              {formatDate(session.date)}
+                            </p>
+                            <h4 className={`text-sm font-black leading-tight line-clamp-2 ${config.text}`}>
+                              {session.contents.map(c => c.lessonName).join(' & ')}
+                            </h4>
+                          </div>
+
+                          <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between">
+                            <span className={`text-[10px] font-bold ${config.sub}`}>
+                              {session.totalPeriods} tiết • {session.totalPeriods * 45} phút
+                            </span>
+                            <div className={`w-7 h-7 rounded-full flex items-center justify-center bg-white/5 border border-white/10 group-hover:bg-white/20 transition-all`}>
+                              <ArrowRight className="w-3.5 h-3.5 text-white/50" />
+                            </div>
+                          </div>
+
+                          {/* Hover effect light */}
+                          <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/5 to-white/0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+              </div>
+            )}
+          </div>
+        </main>
+      </div>
+
+      {/* Toast Notification */}
+      {toast && (
+        <div className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-[200] px-6 py-4 rounded-3xl shadow-2xl backdrop-blur-3xl border border-white/20 animate-in slide-in-from-bottom-10 duration-500 flex items-center gap-3 ${
+          toast.type === 'error' ? 'bg-rose-500/90 text-white' : 'bg-emerald-500/90 text-white'
+        }`}>
+          {toast.type === 'error' ? <Zap className="w-5 h-5 flex-shrink-0" /> : <CheckCircle2 className="w-5 h-5 flex-shrink-0" />}
+          <p className="font-bold text-sm tracking-tight">{toast.message}</p>
+        </div>
+      )}
     </div>
   );
 }

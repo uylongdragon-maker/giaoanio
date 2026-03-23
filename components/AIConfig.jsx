@@ -5,13 +5,13 @@ import { Settings, Eye, EyeOff, CheckCircle, ChevronDown, KeyRound, Sparkles } f
 
 const MODELS = [
   // ── Google Gemini ──────────────────────────────────
-  { id: 'gemini-3-flash-preview',    modelId: 'gemini-3-flash-preview',       label: 'Google Gemini (3.0 Flash Preview)', icon: '⚡', provider: 'gemini' },
-  { id: 'gemini-3.1-pro-preview',    modelId: 'gemini-3.1-pro-preview',       label: 'Google Gemini (3.1 Pro Preview)',   icon: '🤖', provider: 'gemini' },
+  { id: 'gemini-3-flash-preview', modelId: 'gemini-3-flash-preview', label: 'Google Gemini 3.0 Flash (⚡ Cực nhanh)', icon: '⚡', provider: 'gemini' },
+  { id: 'gemini-3.1-pro-preview',  modelId: 'gemini-3.1-pro-preview',  label: 'Google Gemini 3.1 Pro (🧠 Thông minh nhất)',   icon: '🤖', provider: 'gemini' },
   // ── OpenAI ─────────────────────────────────────────
-  { id: 'openai-gpt4o-mini', modelId: 'gpt-4o-mini',                label: 'OpenAI GPT-4o Mini (Nhanh, Rẻ)',     icon: '⚡', provider: 'openai' },
-  { id: 'openai-gpt4o',      modelId: 'gpt-4o',                     label: 'OpenAI GPT-4o (Cao cấp)',            icon: '✨', provider: 'openai' },
+  { id: 'openai-gpt4o-mini', modelId: 'gpt-4o-mini',                label: 'OpenAI GPT-4o Mini',                   icon: '✨', provider: 'openai' },
+  { id: 'openai-gpt4o',      modelId: 'gpt-4o',                     label: 'OpenAI GPT-4o',                        icon: '🌟', provider: 'openai' },
   // ── Anthropic Claude ───────────────────────────────
-  { id: 'anthropic-sonnet',  modelId: 'claude-3-5-sonnet-20240620', label: 'Claude 3.5 Sonnet',                  icon: '🧠', provider: 'anthropic' },
+  { id: 'anthropic-sonnet',  modelId: 'claude-3-5-sonnet-20240620', label: 'Claude 3.5 Sonnet',                   icon: '🧠', provider: 'anthropic' },
 ];
 
 const STORAGE_KEY = 'giao_an_io_config';

@@ -9,13 +9,13 @@ const LESSON_TYPES = [
   { value: 'ly-thuyet-thuc-hanh', label: 'Lý thuyết + Thực hành' },
 ];
 
-export default function LessonForm({ onDataChange }) {
+export default function LessonForm({ data, onDataChange, isLocked }) {
   const [form, setForm] = useState({
-    lessonType: 'ly-thuyet-thuc-hanh',
-    lessonName: '',
-    theoryHours: '',
+    lessonType: data?.lessonType || 'ly-thuyet-thuc-hanh',
+    lessonName: data?.lessonName || '',
+    theoryHours: data?.totalMinutes ? String(data.totalMinutes / 45) : '',
     practiceHours: '',
-    notes: '',
+    notes: data?.notes || '',
   });
   const [isTypeOpen, setIsTypeOpen] = useState(false);
 
@@ -81,7 +81,8 @@ export default function LessonForm({ onDataChange }) {
           value={form.lessonName}
           onChange={(e) => handleChange('lessonName', e.target.value)}
           placeholder="Ví dụ: Bài 1. Giới thiệu lập trình Python..."
-          className={inputClass}
+          className={`\${inputClass} \${isLocked ? 'opacity-50 cursor-not-allowed bg-slate-200' : ''}`}
+          disabled={isLocked}
         />
       </div>
 
@@ -98,7 +99,8 @@ export default function LessonForm({ onDataChange }) {
             value={form.theoryHours}
             onChange={(e) => handleChange('theoryHours', e.target.value)}
             placeholder="0"
-            className={inputClass}
+            className={`\${inputClass} \${isLocked ? 'opacity-50 cursor-not-allowed bg-slate-200' : ''}`}
+            disabled={isLocked}
           />
           {theoryTiets > 0 && (
             <p className="text-xs text-indigo-500 mt-1.5 font-semibold">= {theoryTiets} tiết</p>
@@ -115,7 +117,8 @@ export default function LessonForm({ onDataChange }) {
             value={form.practiceHours}
             onChange={(e) => handleChange('practiceHours', e.target.value)}
             placeholder="0"
-            className={inputClass}
+            className={`\${inputClass} \${isLocked ? 'opacity-50 cursor-not-allowed bg-slate-200' : ''}`}
+            disabled={isLocked}
           />
           {practiceTiets > 0 && (
             <p className="text-xs text-violet-500 mt-1.5 font-semibold">= {practiceTiets} tiết</p>

@@ -3,88 +3,126 @@ import { NextResponse } from 'next/server';
 export async function POST(req) {
   try {
     const body = await req.json();
+    const { apiKey, modelType, mode, fileData } = body;
 
-    const apiKey = body.apiKey;
-    const modelType = body.modelType;
-    const mode = body.mode || 'generate';
-
-    if (!apiKey || !modelType) {
-      return NextResponse.json({ error: "Thiếu API Key hoặc chưa chọn Model AI." }, { status: 400 });
+    if (!apiKey) {
+      return NextResponse.json({ error: "Thiếu API Key." }, { status: 400 });
     }
 
-    const MODEL_MAP = {
-      'gemini-3-flash-preview':   'gemini-3-flash-preview',
-      'gemini-3.0-flash-preview': 'gemini-3-flash-preview',
-      'gemini-3.1-pro-preview':   'gemini-3.1-pro-preview',
-      'openai-gpt4o-mini':        'gpt-4o-mini',
-      'openai-gpt4o':             'gpt-4o',
-      'anthropic-sonnet':         'claude-3-5-sonnet-20240620'
-    };
-
-    const actualModel = MODEL_MAP[modelType];
-    if (!actualModel) {
-      return NextResponse.json({ error: `Model ID không hợp lệ: ${modelType}` }, { status: 400 });
-    }
+    const actualModel = modelType || 'gemini-3-flash-preview';
 
     // ══════════════════════════════════════════════════════════════════════
-    // MODE 1: Phân tích file tài liệu nguồn (Bước 1)
+    // MODE 1: ANALYZE SYLLABUS (Bóc tách phân phối chương trình)
     // ══════════════════════════════════════════════════════════════════════
-    if (mode === 'analyze_file') {
-      if (!modelType.startsWith('gemini')) {
-        return NextResponse.json({ error: "Tính năng Đọc File hiện chỉ hỗ trợ mô hình Google Gemini." }, { status: 400 });
-      }
-      
-      const fileData = body.fileData; // { mimeType, data (base64), rawText }
-      if (!fileData || (!fileData.data && !fileData.rawText)) {
-        return NextResponse.json({ error: "Không tìm thấy dữ liệu file." }, { status: 400 });
+    if (mode === 'analyze_syllabus') {
+      if (!fileData) {
+        return NextResponse.json({ error: "Thiếu dữ liệu file." }, { status: 400 });
       }
 
-      const prompt = "Hãy đọc tài liệu đính kèm và tóm tắt ngắn gọn: 1. Nội dung chính của bài. 2. Mục tiêu trọng tâm. 3. Đề xuất các năng lực cần phát triển cho sinh viên. (Đừng dài dòng, trả về văn bản Text thông thường).";
+      // --- Build prompt and content parts based on the input type ---
+      let parts;
 
-      let partsObj = [];
       if (fileData.rawText) {
-        // Đối với DOCX hoặc file text được đọc từ Frontend
-        partsObj = [
-          { text: `NỘI DUNG TÀI LIỆU:\n${fileData.rawText}\n\nYÊU CẦU THEO SAU:\n${prompt}` }
+        // FAST PATH: HTML/text already extracted client-side (DOCX via mammoth)
+        const prompt = `Dưới đây là nội dung chương trình môn học được trích xuất dưới dạng HTML. Cấu trúc bài học thường nằm trong các thẻ <table>, <tr>, <p>, hoặc <li>.
+
+Hãy đọc TỪ ĐẦU ĐẾN CUỐI toàn bộ HTML này và trích xuất RA TOÀN BỘ CÁC BÀI HỌC.
+Tuyệt đối KHÔNG được tóm tắt. Nếu có 20 bài, phải trích xuất đủ 20 bài.
+Công thức tính số tiết: soTiet = Giờ LT + Math.round((Giờ TH * 60) / 45).
+Nếu không phân biệt LT/TH thì ước lượng hợp lý.
+
+NỘI DUNG HTML:
+${fileData.rawText}
+
+BẮT BUỘC trả về ĐÚNG MỘT MẢNG JSON (không có wrapper object, không có markdown):
+[{"tenBai": "Tên bài 1", "soTiet": 3}, {"tenBai": "Tên bài 2", "soTiet": 2}, ...]`;
+
+        parts = [{ text: prompt }];
+
+      } else if (fileData.data && fileData.mimeType) {
+        // VISION PATH: PDF or Image, needs Gemini Vision
+        const prompt = `Bạn là chuyên gia phân tích chương trình đào tạo. Hãy đọc TOÀN BỘ tài liệu này và trích xuất MỌI BÀI HỌC có trong đó.
+
+KHÔNG ĐƯỢC BỎ SÓT BẤT KỲ BÀI NÀO. KHÔNG ĐƯỢC TÓM TẮT CHUNG CHUNG.
+Quy đổi: theory = Giờ LT. practical = Math.round((Giờ TH * 60) / 45).
+BẮT BUỘC trả về JSON Array, KHÔNG có wrapper, KHÔNG có markdown:
+[{"name": "Tên bài 1", "theory": 2, "practical": 1}, ...]`;
+
+        parts = [
+          { text: prompt },
+          { inlineData: { mimeType: fileData.mimeType, data: fileData.data } }
         ];
       } else {
-        // Đối với Ảnh, PDF (truyền raw base64 qua inlineData)
-        partsObj = [
-          { inlineData: { mimeType: fileData.mimeType, data: fileData.data } },
-          { text: prompt }
-        ];
+        return NextResponse.json({ error: "Không có dữ liệu file để phân tích." }, { status: 400 });
       }
 
-      const url = `https://generativelanguage.googleapis.com/v1alpha/models/${actualModel}:generateContent?key=${apiKey}`;
-      const res = await fetch(url, {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${actualModel}:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contents: [{ 
-            role: "user", 
-            parts: partsObj
-          }],
-          generationConfig: { maxOutputTokens: 2048 }
+          contents: [{ parts }],
+          generationConfig: {
+            responseMimeType: "application/json",
+            temperature: 0.2,
+            maxOutputTokens: 8192
+          }
         })
       });
 
       const data = await res.json();
-      if (!res.ok) return NextResponse.json({ error: data.error?.message || "Lỗi đọc file từ Gemini API" }, { status: res.status });
-      
-      const summaryText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!summaryText) return NextResponse.json({ error: "AI không trích xuất được dữ liệu." }, { status: 500 });
+      if (!res.ok) throw new Error(data.error?.message || "Lỗi AI bóc tách");
 
-      return NextResponse.json({ summary: summaryText }, { status: 200 });
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      const cleanJson = text.replace(/```(json)?\n?|```/g, '').trim();
+      
+      try {
+        const parsed = JSON.parse(cleanJson);
+        
+        // Handle both Array format (new) and Object format {lessons:[]} (old)
+        const lessonsArray = Array.isArray(parsed) ? parsed : (parsed.lessons || []);
+        return NextResponse.json({ lessons: lessonsArray }, { status: 200 });
+      } catch (e) {
+        // Fallback: try to extract array or object
+        const startArr = cleanJson.indexOf('[');
+        const endArr = cleanJson.lastIndexOf(']');
+        const startObj = cleanJson.indexOf('{');
+        const endObj = cleanJson.lastIndexOf('}');
+        
+        if (startArr !== -1 && endArr !== -1) {
+          const extracted = JSON.parse(cleanJson.substring(startArr, endArr + 1));
+          return NextResponse.json({ lessons: extracted }, { status: 200 });
+        } else if (startObj !== -1 && endObj !== -1) {
+          const extracted = JSON.parse(cleanJson.substring(startObj, endObj + 1));
+          return NextResponse.json(extracted, { status: 200 });
+        }
+        throw e;
+      }
     }
 
     // ══════════════════════════════════════════════════════════════════════
-    // MODE 2: Mô phỏng bài giảng (Bước 5)
+    // MODE 2: SIMULATE (Mô phỏng lớp học)
     // ══════════════════════════════════════════════════════════════════════
     if (mode === 'simulate') {
-      const scenario = body.scenario || "Hãy đóng vai học sinh nghịch ngợm đặt câu hỏi khó.";
-      const lessonName = body.formData?.lessonName || "Bài học chung";
+      const { lessonName, scenario, type } = body;
+      let prompt = "";
       
-      const prompt = `Bạn là một Công cụ Mô phỏng Lớp học Sư phạm. 
+      if (type === 'visual') {
+        prompt = `Bạn là một Công cụ Vẽ Sơ đồ Trực quan bằng HTML/CSS.
+Bài học: "${lessonName}".
+Yêu cầu vẽ: ${scenario}
+
+YÊU CẦU KỸ THUẬT:
+1. Hãy tạo một đoạn mã HTML và CSS (inline style hoặc <style> block) để minh họa trực quan yêu cầu trên.
+2. Sử dụng màu sắc rõ nét, các khối div bo góc, icon (nếu cần dùng SVG đơn giản), và label chú thích.
+3. Mã phải chạy được ngay trong một iframe (đầy đủ <html><body>...</body></html>).
+4. Phải mang tính sư phạm, dễ hiểu cho học sinh.
+
+CHỈ TRẢ VỀ DUY NHẤT MỘT ĐỐI TƯỢNG JSON VỚI FORMAT SAU (KHÔNG DÙNG MARKDOWN):
+{
+  "html": "<html>...</html>"
+}`;
+      } else {
+        prompt = `Bạn là một Công cụ Mô phỏng Lớp học Sư phạm. 
 Bài học: "${lessonName}".
 Tình huống cần mô phỏng: ${scenario}
 
@@ -100,6 +138,7 @@ CHỈ TRẢ VỀ DUY NHẤT MỘT ĐỐI TƯỢNG JSON VỚI FORMAT SAU (KHÔNG 
     { "role": "student", "content": "..." }
   ]
 }`;
+      }
 
       body.promptText = prompt;
     }
@@ -120,8 +159,8 @@ Tài nguyên & Năng lực: ${body.wizardData?.competencies?.join(', ') || 'Chư
 ${chatContext}
 YÊU CẦU CỐT LÕI (BẮT BUỘC TUÂN THỦ 100%):
 1. QUY TẮC "BĂM NHỎ" THỜI GIAN VÀ CHIA BUỔI:
-   - Nếu tổng thời gian > 180 phút, BẮT BUỘC chia thành các "Buổi học" (Mỗi buổi tối đa 4 tiết = 180 phút). 
-   - Chia nhỏ nội dung bài giảng, MỖI HOẠT ĐỘNG KHÔNG ĐƯỢC QUÁ 15 PHÚT. Tự động tính toán để tổng thời gian các hoạt động bằng đúng ${body.formData?.totalMinutes || 45} phút.
+   - Hãy soạn giáo án cho buổi học: "${body.formData?.lessonName || 'Bài học'}". Tổng quỹ thời gian của buổi này là đúng ${body.formData?.totalMinutes || 45} phút. Tự động tính toán để tổng thời gian các hoạt động BẮT BUỘC bằng đúng ${body.formData?.totalMinutes || 45} phút.
+   - Chia thành các hoạt động không quá 15 phút. Tuyệt đối bám sát nội dung và thời gian này.
 2. QUY TẮC PHÂN TIẾT RÕ RÀNG: Trong cột Tên hoạt động ("segmentTitle"), phải ghi rõ hoạt động này thuộc "Tiết 1", "Tiết 2"... tương ứng với số phút đã tính.
 3. QUY TẮC NỘI DUNG: Ghi cực kỳ chi tiết kiến thức chuyên môn sẽ truyền đạt trong ô "detailedContent".
 4. QUY TẮC HÀNH ĐỘNG DỨT KHOÁT:
@@ -254,7 +293,9 @@ YÊU CẦU CỐT LÕI (BẮT BUỘC TUÂN THỦ 100%):
       const parsedObj = JSON.parse(cleanJson);
       
       if (mode === 'simulate') {
-        return NextResponse.json({ dialogue: parsedObj.dialogue || [] }, { status: 200 });
+        if (parsedObj.dialogue) return NextResponse.json({ dialogue: parsedObj.dialogue }, { status: 200 });
+        if (parsedObj.html) return NextResponse.json({ html: parsedObj.html }, { status: 200 });
+        return NextResponse.json({ dialogue: [] }, { status: 200 });
       }
     } catch (e) {
       console.error("Parse check failed on backend, continuing to send raw text", e);

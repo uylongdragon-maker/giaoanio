@@ -6,6 +6,7 @@ import { Bot, User, MessageSquare, PlayCircle, Loader2, CheckCircle2 } from 'luc
 export default function SimulationBox({ apiKey, modelType, lessonData, onApplySimulation }) {
   const [messages, setMessages] = useState([]);
   const [isSimulating, setIsSimulating] = useState(false);
+  const [visualHtml, setVisualHtml] = useState(null);
   const scrollRef = useRef(null);
 
   useEffect(() => {
@@ -14,10 +15,11 @@ export default function SimulationBox({ apiKey, modelType, lessonData, onApplySi
     }
   }, [messages]);
 
-  const runSimulation = async (scenario) => {
+  const runSimulation = async (scenario, type = 'chat') => {
     if (!apiKey) return alert("Vui lòng nhập API Key ở cấu hình!");
     setIsSimulating(true);
-    setMessages([]); // Khởi tạo lại chat khi chọn tình huống mới
+    setMessages([]); 
+    setVisualHtml(null);
 
     try {
       const res = await fetch('/api/generate', {
@@ -28,7 +30,8 @@ export default function SimulationBox({ apiKey, modelType, lessonData, onApplySi
           modelType,
           mode: 'simulate',
           formData: lessonData,
-          scenario
+          scenario,
+          type
         })
       });
 
@@ -36,10 +39,12 @@ export default function SimulationBox({ apiKey, modelType, lessonData, onApplySi
       if (!res.ok) throw new Error(data.error || 'Lỗi mô phỏng');
 
       // data.dialogue should be [{ role: 'teacher'|'student', content: '...' }]
-      if (Array.isArray(data.dialogue)) {
+      if (type === 'visual' && data.html) {
+        setVisualHtml(data.html);
+      } else if (Array.isArray(data.dialogue)) {
         setMessages(data.dialogue);
       } else {
-        throw new Error("AI trả về sai cấu trúc hội thoại");
+        throw new Error("AI trả về sai cấu trúc mô phỏng");
       }
     } catch (err) {
       console.error(err);
@@ -50,17 +55,26 @@ export default function SimulationBox({ apiKey, modelType, lessonData, onApplySi
   };
 
   const scenarios = [
-    { id: 'opening', label: 'Mô phỏng mở đầu', prompt: 'Học sinh rất trầm, cần GV tạo không khí sôi động đầu giờ.' },
-    { id: 'problem', label: 'Mô phỏng giải quyết vấn đề', prompt: 'Một học sinh bất ngờ đặt câu hỏi ngược lại kiến thức trọng tâm.' },
-    { id: 'difficult', label: 'Tình huống sư phạm khó', prompt: 'Đóng vai một học sinh nghịch ngợm ở phút 30 và gây rối, gợi ý cách GV xử lý.' }
+    { id: 'opening', label: 'Hội thoại Mở đầu', type: 'chat', prompt: 'Học sinh rất trầm, cần GV tạo không khí sôi động đầu giờ.' },
+    { id: 'visual_camera', label: '🎬 Mô phỏng Góc máy (Visual)', type: 'visual', prompt: 'Hệ thống Camera - Vẽ sơ đồ HTML/CSS minh họa 3 góc máy cơ bản (Toàn, Trung, Cận) và giải thích.' },
+    { id: 'visual_lights', label: '💡 Sơ đồ Ánh sáng (Visual)', type: 'visual', prompt: 'Vẽ sơ đồ vị trí đèn 3 điểm (Key, Fill, Back light) bằng HTML/CSS đơn giản.' },
+    { id: 'difficult', label: 'Tình huống sư phạm', type: 'chat', prompt: 'Một học sinh bất ngờ đặt câu hỏi ngược lại kiến thức trọng tâm.' }
   ];
 
   const handleApply = () => {
     if (messages.length === 0) return;
     
     // Tóm tắt lại thành chuỗi để điền vào giáo án
-    const teacherContent = messages.filter(m => m.role === 'teacher').map(m => m.content).join('\n\n');
-    const studentContent = messages.filter(m => m.role === 'student').map(m => m.content).join('\n\n');
+    let teacherContent = "";
+    let studentContent = "";
+
+    if (visualHtml) {
+      teacherContent = "AI đã tạo sơ đồ trực quan (HTML/CSS).";
+      studentContent = visualHtml;
+    } else {
+      teacherContent = messages.filter(m => m.role === 'teacher').map(m => m.content).join('\n\n');
+      studentContent = messages.filter(m => m.role === 'student').map(m => m.content).join('\n\n');
+    }
 
     if (onApplySimulation) {
       onApplySimulation({ teacherContent, studentContent });
@@ -88,20 +102,39 @@ export default function SimulationBox({ apiKey, modelType, lessonData, onApplySi
           <button
             key={scen.id}
             disabled={isSimulating}
-            onClick={() => runSimulation(scen.prompt)}
-            className="text-xs bg-white border border-slate-200 hover:border-indigo-500 hover:text-indigo-600 font-semibold px-3 py-1.5 rounded-full transition-colors disabled:opacity-50"
+            onClick={() => runSimulation(scen.prompt, scen.type)}
+            className={`text-xs font-semibold px-4 py-2 rounded-full transition-all disabled:opacity-50 border shadow-sm ${
+              scen.type === 'visual' 
+                ? 'bg-indigo-600 border-indigo-500 text-white hover:bg-slate-900' 
+                : 'bg-white border-slate-200 text-slate-700 hover:border-indigo-500 hover:text-indigo-600'
+            }`}
           >
             {scen.label}
           </button>
         ))}
       </div>
 
-      {/* Chat Area */}
+      {/* Chat / Visual Area */}
       <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-slate-50/50" ref={scrollRef}>
-        {messages.length === 0 && !isSimulating && (
+        {!visualHtml && messages.length === 0 && !isSimulating && (
           <div className="h-full flex flex-col items-center justify-center text-center opacity-50">
-            <MessageSquare className="w-12 h-12 text-slate-400 mb-3" />
-            <p className="text-sm font-medium text-slate-500">Chọn một tình huống bên trên<br/>để bắt đầu mô phỏng tiết học</p>
+            <PlayCircle className="w-12 h-12 text-indigo-400 mb-3 animate-pulse" />
+            <p className="text-sm font-bold text-indigo-900 uppercase tracking-widest">Smart Simulation Hub</p>
+            <p className="text-xs font-medium text-slate-500 mt-1">Chọn Hội thoại hoặc Mô phỏng trực quan</p>
+          </div>
+        )}
+
+        {visualHtml && (
+          <div className="h-full flex flex-col gap-4 animate-in fade-in zoom-in duration-500">
+             <div className="bg-emerald-100/50 border border-emerald-200 p-3 rounded-xl flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <span className="text-[10px] font-bold text-emerald-800 uppercase">Sơ đồ trực quan đã sẵn sàng</span>
+             </div>
+             <iframe 
+               srcDoc={visualHtml} 
+               className="flex-1 w-full bg-white rounded-2xl border border-slate-200 shadow-inner"
+               title="Visual Simulation"
+             />
           </div>
         )}
 
@@ -137,7 +170,7 @@ export default function SimulationBox({ apiKey, modelType, lessonData, onApplySi
       </div>
 
       {/* Footer / Apply */}
-      {messages.length > 0 && !isSimulating && (
+      {(messages.length > 0 || visualHtml) && !isSimulating && (
         <div className="p-4 bg-white border-t border-slate-100 shrink-0">
           <button
             onClick={handleApply}
