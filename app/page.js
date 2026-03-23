@@ -8,13 +8,17 @@ import LessonWizard from '@/components/LessonWizard';
 import SettingsModal from '@/components/SettingsModal';
 import SessionPreviewModal from '@/components/SessionPreviewModal';
 import AILandingConfig from '@/components/AILandingConfig';
-import { UploadCloud, Calendar as CalendarIcon, Zap, CheckCircle2, Clock, ArrowRight, Settings, Library, Loader2, PlayCircle, ArrowLeft } from 'lucide-react';
+import SyllabusPreviewTable from '@/components/SyllabusPreviewTable';
+import { UploadCloud, Calendar as CalendarIcon, Zap, CheckCircle2, Clock, ArrowRight, Settings, Library, Loader2, PlayCircle, ArrowLeft, BookOpen, ChevronRight } from 'lucide-react';
 
 export default function Home() {
   const [isClient, setIsClient] = useState(false);
   
   const [aiConfig, setAiConfig] = useState(null);
   const [courseData, setCourseData] = useState(null);
+  const [setupStep, setSetupStep] = useState('upload'); // upload, preview, config, hub
+  const [parsedSyllabus, setParsedSyllabus] = useState([]);
+  
   const [selectedSession, setSelectedSession] = useState(null);
   const [previewSession, setPreviewSession] = useState(null); // New for Green cards
   const [showConfig, setShowConfig] = useState(false); 
@@ -27,7 +31,15 @@ export default function Home() {
       if (storedConfig) setAiConfig(JSON.parse(storedConfig));
       
       const storedCourse = localStorage.getItem('courseTimetable');
-      if (storedCourse) setCourseData(JSON.parse(storedCourse));
+      if (storedCourse) {
+        const parsed = JSON.parse(storedCourse);
+        setCourseData(parsed);
+        if (parsed.schedule) setSetupStep('hub');
+        else if (parsed.lessons) {
+          setParsedSyllabus(parsed.lessons);
+          setSetupStep('config');
+        }
+      }
     } catch (e) {
       console.warn("Storage parse error", e);
     }
@@ -40,11 +52,17 @@ export default function Home() {
   }, [aiConfig, courseData, isClient]);
 
   const handleCourseAnalyzed = (lessons) => {
-    setCourseData({ lessons, schedule: null });
+    setParsedSyllabus(lessons);
+    setSetupStep('preview');
+  };
+
+  const handlePreviewConfirm = () => {
+    setSetupStep('config');
   };
 
   const handleScheduleComplete = (sessions) => {
-    setCourseData(prev => ({ ...prev, schedule: sessions }));
+    setCourseData({ lessons: parsedSyllabus, schedule: sessions });
+    setSetupStep('hub');
   };
 
   const handleWizardComplete = (sessionId, generatedLesson, wizardData) => {
@@ -70,6 +88,8 @@ export default function Home() {
   const clearCourse = () => {
     if (confirm("Bạn có chắc muốn xóa lịch trình hiện tại và tạo lại từ đầu?")) {
       setCourseData(null);
+      setParsedSyllabus([]);
+      setSetupStep('upload');
       localStorage.removeItem('courseTimetable');
     }
   };
@@ -191,22 +211,39 @@ export default function Home() {
         <main className="max-w-7xl mx-auto w-full px-4 pt-6 pb-20">
           <div className="animate-fade-in">
             
-            {/* NO COURSE STATE: Upload / Setup */}
-            {!courseData && (
+            {/* STEP 1: Upload */}
+            {setupStep === 'upload' && (
               <div className="max-w-3xl mx-auto mt-12 bg-white/10 backdrop-blur-3xl rounded-[32px] p-2 border border-white/10 shadow-[0_8px_32px_rgb(0,0,0,0.3)]">
                 <CourseUploader apiKey={aiConfig?.apiKey} modelType={aiConfig?.modelType} onCourseAnalyzed={handleCourseAnalyzed} />
               </div>
             )}
 
-            {/* HAS COURSE BUT NO SCHEDULE: Schedule Config */}
-            {courseData && !courseData.schedule && (
-              <div className="max-w-3xl mx-auto mt-12 bg-white/10 backdrop-blur-3xl rounded-[32px] p-2 border border-white/10 shadow-[0_8px_32px_rgb(0,0,0,0.3)]">
-                <SchedulingForm lessons={courseData.lessons} onScheduleComplete={handleScheduleComplete} />
+            {/* STEP 2: Preview Table */}
+            {setupStep === 'preview' && (
+              <div className="mt-8">
+                <SyllabusPreviewTable 
+                  lessons={parsedSyllabus} 
+                  onConfirm={handlePreviewConfirm} 
+                  onCancel={() => setSetupStep('upload')} 
+                />
               </div>
             )}
 
-            {/* CONTROL CENTER BENTO GRID */}
-            {courseData && courseData.schedule && (
+            {/* STEP 3: Schedule Config */}
+            {setupStep === 'config' && (
+              <div className="max-w-3xl mx-auto mt-12 bg-white/10 backdrop-blur-3xl rounded-[32px] p-2 border border-white/10 shadow-[0_8px_32px_rgb(0,0,0,0.3)]">
+                <div className="p-4 border-b border-white/10 flex items-center justify-between mb-2">
+                   <button onClick={() => setSetupStep('preview')} className="text-xs font-bold text-slate-400 flex items-center gap-1 hover:text-white transition-colors">
+                      <ArrowLeft className="w-3 h-3" /> Quay lại Bảng duyệt
+                   </button>
+                   <span className="text-[10px] font-black uppercase tracking-widest text-indigo-400">Bước 3: Cấu hình thời gian</span>
+                </div>
+                <SchedulingForm lessons={parsedSyllabus} onScheduleComplete={handleScheduleComplete} />
+              </div>
+            )}
+
+            {/* STEP 4: Smart Hub (CONTROL CENTER) */}
+            {setupStep === 'hub' && courseData && courseData.schedule && (
               <div className="flex flex-col gap-6">
                 
                 {/* DÒNG 1: BENTO WIDGETS */}

@@ -38,6 +38,26 @@ export default function SchedulingForm({ lessons, onScheduleComplete }) {
     });
   };
 
+  const totalPeriods = lessons.reduce((sum, l) => sum + (l.tietLT || 0) + (l.tietTH || 0), 0);
+  
+  const calculateProjectedEnd = () => {
+    if (!startDate || totalPeriods === 0) return null;
+    let tempDate = new Date(startDate);
+    let remaining = totalPeriods;
+    let safetyGuard = 0;
+
+    while (remaining > 0 && safetyGuard < 500) {
+      const dayOfWeek = tempDate.getDay();
+      const periodsToday = dayConfigs[dayOfWeek] || 0;
+      remaining -= periodsToday;
+      if (remaining > 0) tempDate.setDate(tempDate.getDate() + 1);
+      safetyGuard++;
+    }
+    return tempDate;
+  };
+
+  const projectedEnd = calculateProjectedEnd();
+
   const handleSchedule = () => {
     if (!startDate) {
       alert("Vui lòng chọn ngày bắt đầu.");
@@ -60,24 +80,35 @@ export default function SchedulingForm({ lessons, onScheduleComplete }) {
           <Calendar className="w-6 h-6 text-indigo-600" />
         </div>
         <div>
-          <h2 className="text-xl font-black text-slate-800">Thiết lập Lịch Hub</h2>
-          <p className="text-sm text-slate-500">Hệ thống đã nhận diện <strong>{lessons.length}</strong> bài học.</p>
+          <h2 className="text-xl font-black text-slate-800">Cấu hình Lịch giảng dạy</h2>
+          <p className="text-sm text-slate-500">Môn học có <strong>{totalPeriods} tiết</strong> cần phân bổ.</p>
         </div>
       </div>
 
       <div className="space-y-6">
-        <div>
-          <label className="block text-sm font-bold text-slate-700 mb-2 uppercase tracking-widest text-[10px]">Ngày bắt đầu</label>
-          <input 
-            type="date" 
-            value={startDate}
-            onChange={e => setStartDate(e.target.value)}
-            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500 text-slate-800 outline-none transition-all hover:bg-white"
-          />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-bold text-slate-700 mb-2 uppercase tracking-widest text-[10px]">Ngày bắt đầu</label>
+            <input 
+              type="date" 
+              value={startDate}
+              onChange={e => setStartDate(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500 text-slate-800 outline-none transition-all hover:bg-white"
+            />
+          </div>
+          {projectedEnd && (
+            <div className="bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3 flex flex-col justify-center">
+              <label className="block text-[10px] font-black text-emerald-600 mb-0.5 uppercase tracking-widest">Dự tính kết thúc</label>
+              <p className="text-sm font-black text-emerald-800">
+                {projectedEnd.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+              </p>
+              <p className="text-[9px] text-emerald-600/70 italic font-medium">Dựa trên cấu hình bên dưới</p>
+            </div>
+          )}
         </div>
 
         <div>
-          <label className="block text-sm font-bold text-slate-700 mb-3 uppercase tracking-widest text-[10px]">Cấu hình buổi học (Bất đối xứng)</label>
+          <label className="block text-sm font-bold text-slate-700 mb-3 uppercase tracking-widest text-[10px]">Phân bổ tiết học hàng tuần</label>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {daysOfWeek.map(day => {
               const isActive = dayConfigs[day.value] !== undefined;
@@ -101,7 +132,7 @@ export default function SchedulingForm({ lessons, onScheduleComplete }) {
                            onChange={e => handlePeriodChange(day.value, e.target.value)}
                            className="w-12 bg-white border border-indigo-200 rounded-lg text-center text-xs font-black text-indigo-700 py-1"
                          />
-                         <span className="text-[10px] text-indigo-400 font-medium">tiết/buổi</span>
+                         <span className="text-[10px] text-indigo-400 font-medium tracking-tight">tiết / buổi</span>
                       </div>
                     )}
                   </div>
@@ -116,7 +147,7 @@ export default function SchedulingForm({ lessons, onScheduleComplete }) {
           className="w-full bg-indigo-600 hover:bg-slate-900 text-white font-black py-5 px-6 rounded-[24px] shadow-xl shadow-indigo-100 transition-all hover:-translate-y-1 flex items-center justify-center gap-3 mt-4 group"
         >
           <Sparkles className="w-6 h-6 group-hover:animate-spin" /> 
-          PHÂN BỔ LỊCH TRÌNH THÔNG MINH
+          HOÀN TẤT & KHỞI TẠO SMART HUB
         </button>
       </div>
     </div>
