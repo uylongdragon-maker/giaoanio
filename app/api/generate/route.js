@@ -24,21 +24,27 @@ export async function POST(req) {
 
       if (fileData.rawText) {
         // FAST PATH: HTML/text already extracted client-side (DOCX via mammoth)
-        const prompt = `Dưới đây là nội dung chương trình môn học được trích xuất dưới dạng HTML. Cấu trúc bài học thường nằm trong các thẻ <table>, <tr>, <p>, hoặc <li>.
+        const prompt = `Bạn là chuyên gia phân tích chương trình đào tạo. Dưới đây là nội dung HTML của một file đề cương. Cấu trúc bảng phân phối thời gian rất phức tạp, có các cột: Tổng số, Lý thuyết, Thực hành, KT (Kiểm tra), Thi.
 
-Hãy đọc TỪ ĐẦU ĐẾN CUỐI toàn bộ HTML này và trích xuất RA TOÀN BỘ CÁC BÀI HỌC.
-Tuyệt đối KHÔNG được tóm tắt. Nếu có 20 bài, phải trích xuất đủ 20 bài.
+Nhiệm vụ của bạn:
+1. Trích xuất TẤT CẢ các dòng có chứa thời gian học. Bao gồm các 'Bài học', các buổi 'Kiểm tra', và buổi 'Thi kết thúc'. TUYỆT ĐỐI KHÔNG BỎ SÓT DÒNG NÀO.
+2. Với mỗi dòng, tìm chính xác số Giờ Lý Thuyết, Giờ Thực Hành, Giờ Kiểm Tra, Giờ Thi. (Lưu ý: Bảng HTML có thể bị xô lệch cột do merge cell, hãy dựa vào ngữ cảnh để lấy đúng số).
+3. TỰ ĐỘNG QUY ĐỔI TỪ GIỜ SANG TIẾT theo công thức bắt buộc:
+   - tietLT = Số Giờ Lý thuyết.
+   - tietTH = Math.round( (Số Giờ Thực hành + Số Giờ Kiểm tra + Số Giờ Thi) * 60 / 45 ).
 
-NHIỆM VỤ: Với mỗi bài học, hãy tìm chính xác số liệu ở 3 cột: Giờ Lý thuyết, Giờ Thực hành (hoặc bài tập/thảo luận), Giờ Kiểm tra (hoặc thi).
-Sau đó, tự động chuyển đổi từ GIỜ sang TIẾT theo công thức bắt buộc sau:
-- tietLT (Tiết Lý thuyết) = Số Giờ Lý thuyết.
-- tietTH (Tiết Thực hành & Kiểm tra) = LÀM TRÒN SỐ CỦA: ((Số Giờ Thực hành + Số Giờ Kiểm tra) * 60 / 45).
+BẮT BUỘC TRẢ VỀ ĐÚNG ĐỊNH DẠNG JSON ARRAY. Dưới đây là VÍ DỤ MẪU CHUẨN ĐÚNG VỚI CẤU TRÚC FILE NÀY:
+[
+  { "tenBai": "Bài 1: Tổng quan", "tietLT": 3, "tietTH": 0 },
+  { "tenBai": "Bài 2: Kỹ thuật máy quay", "tietLT": 6, "tietTH": 17 },
+  { "tenBai": "Kiểm tra 1", "tietLT": 0, "tietTH": 1 },
+  { "tenBai": "Bài 3: Kỹ thuật chụp ảnh", "tietLT": 6, "tietTH": 17 },
+  { "tenBai": "Kiểm tra 2", "tietLT": 0, "tietTH": 1 },
+  { "tenBai": "Thi kết thúc môn học", "tietLT": 0, "tietTH": 3 }
+]
 
-NỘI DUNG HTML:
-${fileData.rawText}
-
-BẮT BUỘC trả về ĐÚNG MỘT MẢNG JSON (không có wrapper object, không có markdown):
-[{"tenBai": "Tên bài 1", "tietLT": 2, "tietTH": 1}, {"tenBai": "Tên bài 2", "tietLT": 0, "tietTH": 3}, ...]`;
+Nội dung HTML cần phân tích:
+${fileData.rawText}`;
 
         parts = [{ text: prompt }];
 
