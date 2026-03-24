@@ -20,8 +20,8 @@ export default function SyllabusPreviewTable({ lessons, onConfirm, onCancel, onC
   const addRow = () => {
     const newLesson = {
       id: `lesson-new-${Date.now()}`,
-      name: '',
-      subItems: '',
+      tenBai: '',
+      deMuc: '',
       gioLT: 0,
       gioTH: 0,
       status: 'Chưa soạn'
@@ -37,8 +37,8 @@ export default function SyllabusPreviewTable({ lessons, onConfirm, onCancel, onC
     if (onChange) onChange(updated);
   };
 
-  const totalLT = localLessons.reduce((sum, l) => sum + (parseFloat(l.gioLT ?? l.tietLT) || 0), 0);
-  const totalTH = localLessons.reduce((sum, l) => sum + (parseFloat(l.gioTH ?? l.tietTH) || 0), 0);
+  const totalLT = localLessons.reduce((sum, l) => sum + (parseFloat(l.gioLT) || 0), 0);
+  const totalTH = localLessons.reduce((sum, l) => sum + (parseFloat(l.gioTH) || 0), 0);
   // Quy đổi TH theo hệ số 60/45 cho summary dự kiến
   const totalTHConverted = totalTH * (60 / 45);
   const totalPeriods = totalLT + totalTHConverted;
@@ -93,16 +93,16 @@ export default function SyllabusPreviewTable({ lessons, onConfirm, onCancel, onC
                   <td className="px-4 py-3">
                     <input 
                       type="text"
-                      value={lesson.name || lesson.tenBai || ''}
-                      onChange={(e) => handleUpdate(idx, 'name', e.target.value)}
+                      value={lesson.tenBai || ''}
+                      onChange={(e) => handleUpdate(idx, 'tenBai', e.target.value)}
                       placeholder="VD: Bài 1: Tổng quan..."
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
                     />
                   </td>
                   <td className="px-4 py-3">
                     <textarea 
-                      value={lesson.subItems || lesson.deMuc || ''}
-                      onChange={(e) => handleUpdate(idx, 'subItems', e.target.value)}
+                      value={lesson.deMuc || ''}
+                      onChange={(e) => handleUpdate(idx, 'deMuc', e.target.value)}
                       placeholder="VD: 1. Khái niệm, 2. Lịch sử..."
                       rows={1}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-600 outline-none focus:ring-2 focus:ring-indigo-500 transition-all resize-none overflow-hidden min-h-[40px]"
@@ -112,7 +112,7 @@ export default function SyllabusPreviewTable({ lessons, onConfirm, onCancel, onC
                     <input 
                       type="number"
                       step="0.5"
-                      value={lesson.gioLT ?? lesson.tietLT ?? 0}
+                      value={lesson.gioLT ?? 0}
                       onChange={(e) => handleUpdate(idx, 'gioLT', e.target.value)}
                       className="w-16 bg-blue-50/50 border border-blue-100 rounded-xl px-2 py-2 text-center text-sm font-black text-blue-600 outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                     />
@@ -121,7 +121,7 @@ export default function SyllabusPreviewTable({ lessons, onConfirm, onCancel, onC
                     <input 
                       type="number"
                       step="0.5"
-                      value={lesson.gioTH ?? lesson.tietTH ?? 0}
+                      value={lesson.gioTH ?? 0}
                       onChange={(e) => handleUpdate(idx, 'gioTH', e.target.value)}
                       className="w-16 bg-emerald-50/50 border border-emerald-100 rounded-xl px-2 py-2 text-center text-sm font-black text-emerald-600 outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
                     />

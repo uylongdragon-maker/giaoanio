@@ -84,30 +84,17 @@ export default function CourseUploader({ onCourseAnalyzed, apiKey, modelType }) 
       const data = await res.json();
       console.log("[CourseUploader] AI trả về data:", data); // Debug: kiểm tra số lượng bài học
 
-      if (!res.ok) throw new Error(data.error || 'Lỗi bóc tách từ AI');
+      if (!res.ok) {
+        console.error("[CourseUploader] Lỗi từ Backend:", data);
+        throw new Error(data.error || 'Lỗi bóc tách từ AI');
+      }
       
       if (!data.lessons || data.lessons.length === 0) {
         throw new Error("AI không nhận diện được bài học nào. Vui lòng kiểm tra định dạng file.");
       }
 
-      // Map to consistent lesson shape - handle all possible key names from AI
-      const processedLessons = data.lessons.map((ls, idx) => {
-        const tLT = Number(ls.tietLT ?? ls.lt ?? 0);
-        const tTH = Number(ls.tietTH ?? ls.th ?? ls.soTietTH ?? 0);
-        const total = tLT + tTH || 1;
-
-        return {
-          id: `lesson-${idx + 1}`,
-          name: ls.name || ls.tenBai || `Bài ${idx + 1}`,
-          tietLT: tLT,
-          tietTH: tTH,
-          totalPeriods: total,
-          status: 'Chưa soạn'
-        };
-      });
-
-      showToast(`✅ Đã nhận diện ${processedLessons.length} bài học!`, "success");
-      if (onCourseAnalyzed) onCourseAnalyzed(processedLessons);
+      showToast(`✅ Đã nhận diện ${data.lessons.length} bài học!`, "success");
+      if (onCourseAnalyzed) onCourseAnalyzed(data.lessons);
 
     } catch (err) {
       console.error(err);

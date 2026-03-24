@@ -17,17 +17,17 @@ export function generateTimetable(syllabus, startDate, dayConfigs, holidayList =
   let allSteps = [];
 
   syllabus.forEach((item, idx) => {
-    const hLt = parseFloat(item.gioLT ?? item.tietLT) || 0;
-    const hTh = parseFloat(item.gioTH ?? item.tietTH) || 0;
+    let hLt = parseFloat(item.gioLT) || 0;
+    let hTh = parseFloat(item.gioTH) || 0;
     
     // Đề mục chi tiết: tách theo dấu phẩy
-    let subList = (item.subItems || item.deMuc || "")
+    let subList = (item.deMuc || "")
       .split(',')
       .map(s => s.trim())
       .filter(s => s !== "");
     
     if (subList.length === 0) {
-      subList = [item.name || item.tenBai || `Bài ${idx + 1}`];
+      subList = [item.tenBai || `Bài ${idx + 1}`];
     }
 
     // Tính số tiết cho mỗi đề mục con
@@ -40,7 +40,7 @@ export function generateTimetable(syllabus, startDate, dayConfigs, holidayList =
       // Thêm phần Lý thuyết của đề mục này
       if (pPerLt > 0) {
         allSteps.push({
-          parentTitle: item.name || item.tenBai,
+          parentTitle: item.tenBai,
           subTitle: s,
           type: 'LT',
           remaining: pPerLt,
@@ -50,7 +50,7 @@ export function generateTimetable(syllabus, startDate, dayConfigs, holidayList =
       // Thêm phần Thực hành của đề mục này (Xen kẽ ngay sau LT)
       if (pPerTh > 0) {
         allSteps.push({
-          parentTitle: item.name || item.tenBai,
+          parentTitle: item.tenBai,
           subTitle: s,
           type: 'TH',
           remaining: pPerTh,

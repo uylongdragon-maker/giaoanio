@@ -9,6 +9,7 @@ import SettingsModal from '@/components/SettingsModal';
 import SessionPreviewModal from '@/components/SessionPreviewModal';
 import AILandingConfig from '@/components/AILandingConfig';
 import SyllabusPreviewTable from '@/components/SyllabusPreviewTable';
+import { generateTimetable } from '@/app/utils/scheduler';
 import { UploadCloud, Calendar as CalendarIcon, Zap, CheckCircle2, Clock, ArrowRight, Settings, Library, Loader2, PlayCircle, ArrowLeft, BookOpen, ChevronRight } from 'lucide-react';
 
 export default function Home() {
@@ -56,7 +57,11 @@ export default function Home() {
     const initializedLessons = lessons.map((l, i) => ({
       ...l,
       id: l.id || `lesson-${Date.now()}-${i}`,
-      subItems: l.subItems || l.deMuc || ""
+      tenBai: l.tenBai || l.name || "",
+      deMuc: l.deMuc || l.subItems || "",
+      gioLT: parseFloat(l.gioLT ?? l.lt ?? 0),
+      gioTH: parseFloat(l.gioTH ?? l.th ?? 0),
+      status: 'Chưa soạn'
     }));
     setParsedSyllabus(initializedLessons);
     setSetupStep('preview');

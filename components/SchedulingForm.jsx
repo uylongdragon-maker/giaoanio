@@ -51,8 +51,8 @@ export default function SchedulingForm({ lessons, onScheduleComplete }) {
   };
 
   const totalPeriods = lessons.reduce((sum, l) => {
-    const glt = parseFloat(l.gioLT ?? l.tietLT) || 0;
-    const gth = parseFloat(l.gioTH ?? l.tietTH) || 0;
+    const glt = parseFloat(l.gioLT || 0);
+    const gth = parseFloat(l.gioTH || 0);
     return sum + glt + (gth * (60 / 45)); // Quy đổi 60/45 cho TH/KT
   }, 0);
   

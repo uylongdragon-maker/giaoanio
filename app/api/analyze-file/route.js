@@ -13,35 +13,43 @@ export async function POST(req) {
     let parts;
 
     if (fileData.rawText) {
-      const prompt = `Bạn là chuyên gia bóc tách chương trình đào tạo. Dưới đây là nội dung HTML của một file đề cương. Cấu trúc bảng phân phối thời gian rất phức tạp, có các cột: Tổng số, Lý thuyết, Thực hành, KT (Kiểm tra), Thi.
+      const prompt = `Bạn là chuyên gia bóc tách đề cương. Hãy phân tích bảng HTML và trích xuất TOÀN BỘ dữ liệu. 
+YÊU CẦU MỚI:
+1. Đối với mỗi bài học, hãy tìm các dòng mục lục con/chi tiết nằm bên dưới nó, gộp chúng lại thành một chuỗi, cách nhau bằng dấu phẩy (gán vào key "deMuc"). Nếu không có thì để trống.
+2. gioLT: Số Giờ Lý thuyết nguyên bản.
+3. gioTH: Tổng số Giờ Thực hành + Kiểm tra + Thi.
+TUYỆT ĐỐI KHÔNG QUY ĐỔI. Lấy đúng con số hiển thị trong bảng.
 
-Nhiệm vụ của bạn:
-1. Trích xuất TẤT CẢ các dòng có chứa thời gian học. Bao gồm các 'Bài học', các buổi 'Kiểm tra', và buổi 'Thi kết thúc'. TUYỆT ĐỐI KHÔNG BỎ SÓT DÒNG NÀO.
-2. Với mỗi dòng, tìm chính xác số GIỜ học nguyên bản từ bảng.
-   - gioLT: Số Giờ Lý thuyết.
-   - gioTH: Tổng của (Số Giờ Thực hành + Số Giờ Kiểm tra + Số Giờ Thi).
-3. TUYỆT ĐỐI KHÔNG ĐƯỢC TỰ QUY ĐỔI SANG TIẾT. Lấy đúng con số hiển thị trong bảng.
-
-BẮT BUỘC TRẢ VỀ ĐÚNG ĐỊNH DẠNG JSON ARRAY. Dưới đây là VÍ DỤ MẪU:
+BẮT BUỘC TRẢ VỀ ĐÚNG ĐỊNH DẠNG JSON ARRAY SAU:
 [
-  { "tenBai": "Bài 1: Tổng quan", "gioLT": 3, "gioTH": 0 },
-  { "tenBai": "Bài 2: Kỹ thuật máy quay", "gioLT": 6, "gioTH": 13 },
-  { "tenBai": "Kiểm tra 1", "gioLT": 0, "gioTH": 1 },
-  { "tenBai": "Thi kết thúc môn học", "gioLT": 0, "gioTH": 3 }
+  {
+    "tenBai": "Bài 2: Kỹ thuật máy quay",
+    "deMuc": "1. Giới thiệu máy quay, 2. Ống kính, 3. Cơ bản về quay phim, 4. Ánh sáng",
+    "gioLT": 6,
+    "gioTH": 13
+  },
+  {
+    "tenBai": "Kiểm tra",
+    "deMuc": "Kiểm tra kỹ năng",
+    "gioLT": 0,
+    "gioTH": 1
+  }
 ]
 
 Nội dung HTML cần phân tích:
 ${fileData.rawText}`;
       parts = [{ text: prompt }];
     } else if (fileData.data && fileData.mimeType) {
-      const prompt = `Bạn là chuyên gia phân tích chương trình đào tạo. Hãy đọc TOÀN BỘ tài liệu này và trích xuất MỌI BÀI HỌC.
-
-Nhiệm vụ: Trích xuất chính xác số GIỜ học nguyên bản từ bảng (KHÔNG QUY ĐỔI).
-- gioLT: Số Giờ Lý thuyết.
-- gioTH: Tổng Giờ Thực hành/Kiểm tra/Thi.
+      const prompt = `Bạn là chuyên gia bóc tách đề cương. Hãy đọc tài liệu và trích xuất TOÀN BỘ bài học.
+YÊU CẦU:
+1. Đối với mỗi bài học, hãy tìm các đề mục con/chi tiết nếu có, gộp chúng lại thành một chuỗi, cách nhau bằng dấu phẩy (gán vào key "deMuc").
+2. tenBai: Tên chương/bài lớn.
+3. gioLT: Số Giờ Lý thuyết nguyên bản.
+4. gioTH: Tổng Giờ Thực hành + Kiểm tra + Thi.
+TUYỆT ĐỐI KHÔNG QUY ĐỔI. Lấy đúng con số hiển thị trong tài liệu.
 
 BẮT BUỘC trả về JSON Array:
-[{"tenBai": "Tên bài 1", "gioLT": 2, "gioTH": 4}, ...]`;
+[{"tenBai": "Tên bài 1", "deMuc": "Mục 1, Mục 2", "gioLT": 2, "gioTH": 4}, ...]`;
       parts = [
         { text: prompt },
         { inlineData: { mimeType: fileData.mimeType, data: fileData.data } }
@@ -68,10 +76,18 @@ BẮT BUỘC trả về JSON Array:
 
     let responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
-    // GỌT VỎ MARKDOWN (QUAN TRỌNG)
-    responseText = responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
+    // TRÍCH XUẤT JSON ROBUST (Tìm cặp ngoặc đầu và cuối)
+    const firstBracket = responseText.search(/[\[\{]/);
+    const lastBracket = Math.max(responseText.lastIndexOf(']'), responseText.lastIndexOf('}'));
+    
+    if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+      responseText = responseText.substring(firstBracket, lastBracket + 1);
+    } else {
+      responseText = responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
+    }
 
     try {
+      if (!responseText) throw new Error("AI trả về kết quả rỗng.");
       const parsedData = JSON.parse(responseText);
       const lessonsArray = Array.isArray(parsedData) ? parsedData : (parsedData.lessons || []);
       return NextResponse.json({ lessons: lessonsArray }, { status: 200 });
@@ -79,7 +95,8 @@ BẮT BUỘC trả về JSON Array:
       console.error("Lỗi Parse JSON. Chuỗi gốc từ AI:", responseText);
       return NextResponse.json({ 
         error: "Lỗi AI/Parse", 
-        details: "Dữ liệu AI trả về sai định dạng JSON." 
+        details: parseError.message,
+        raw: responseText.substring(0, 500) // Trả về một đoạn để debug
       }, { status: 500 });
     }
 
