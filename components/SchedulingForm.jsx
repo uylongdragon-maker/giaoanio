@@ -6,8 +6,37 @@ import { generateTimetable } from '../app/utils/scheduler';
 
 export default function SchedulingForm({ lessons, onScheduleComplete }) {
   const [startDate, setStartDate] = useState('');
-  // dayConfigs: { [dayIndex]: periods }
+  const [dayConfigs, setDayConfigs] = useState({}); // { [dayIndex]: periods }
   const [holidays, setHolidays] = useState('');
+
+  const daysOfWeek = [
+    { label: 'Thứ 2', value: 1 },
+    { label: 'Thứ 3', value: 2 },
+    { label: 'Thứ 4', value: 3 },
+    { label: 'Thứ 5', value: 4 },
+    { label: 'Thứ 6', value: 5 },
+    { label: 'Thứ 7', value: 6 },
+    { label: 'Chủ Nhật', value: 0 }
+  ];
+
+  const handleDayToggle = (dayValue) => {
+    setDayConfigs(prev => {
+      const newConfigs = { ...prev };
+      if (newConfigs[dayValue] !== undefined) {
+        delete newConfigs[dayValue];
+      } else {
+        newConfigs[dayValue] = 3; // Default to 3 periods if none set
+      }
+      return newConfigs;
+    });
+  };
+
+  const handlePeriodChange = (dayValue, value) => {
+    setDayConfigs(prev => ({
+      ...prev,
+      [dayValue]: parseInt(value) || 0
+    }));
+  };
 
   const parseHolidays = () => {
     return holidays.split(',').map(h => {
@@ -22,9 +51,9 @@ export default function SchedulingForm({ lessons, onScheduleComplete }) {
   };
 
   const totalPeriods = lessons.reduce((sum, l) => {
-    const lt = parseFloat(l.tietLT) || 0;
-    const th = parseFloat(l.tietTH) || 0;
-    return sum + lt + (th * 1.33); // Quy đổi 1.33 cho TH
+    const glt = parseFloat(l.gioLT ?? l.tietLT) || 0;
+    const gth = parseFloat(l.gioTH ?? l.tietTH) || 0;
+    return sum + glt + (gth * (60 / 45)); // Quy đổi 60/45 cho TH/KT
   }, 0);
   
   const calculateProjectedEnd = () => {

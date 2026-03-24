@@ -383,7 +383,7 @@ export default function Home() {
                   </div>
 
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-4">
-                    {courseData.schedule.map((session, idx) => {
+                    {courseData.schedule.map((session) => {
                       const sessionDate = new Date(session.date);
                       const now = new Date('2026-03-23T00:17:29');
                       const diffDays = Math.ceil((sessionDate - now) / (1000 * 60 * 60 * 24));
@@ -426,7 +426,7 @@ export default function Home() {
                           className={`group relative backdrop-blur-xl rounded-[28px] border p-5 cursor-pointer flex flex-col justify-between overflow-hidden transition-all active:scale-[0.98] ${config.card}`}
                         >
                           <div className="flex justify-between items-start mb-4">
-                            <div className={`p-2 rounded-2xl bg-white/5 border border-white/10`}>
+                            <div className="p-2 rounded-2xl bg-white/5 border border-white/10">
                               {config.icon}
                             </div>
                             <span className={`text-[10px] font-black uppercase tracking-tighter opacity-70 ${config.sub}`}>{config.label}</span>
@@ -440,7 +440,6 @@ export default function Home() {
                               {session.contents.map(c => c.lessonName).join(' & ')}
                             </h4>
                             
-                            {/* LT/TH Badges */}
                             <div className="mt-2 flex flex-wrap gap-1.5">
                               {session.contents.map((content, sidx) => (
                                 <div key={sidx} className="flex flex-col gap-1 w-full border-b border-white/5 pb-2 mb-2 last:border-0 last:mb-0">
@@ -448,14 +447,14 @@ export default function Home() {
                                      {content.subItem || content.lessonName}
                                   </p>
                                   <div className="flex gap-1">
-                                    {content.tietLT > 0 && (
+                                    {(content.tietLT > 0) && (
                                       <span className="px-1.5 py-0.5 rounded-md bg-blue-500/20 text-blue-200 text-[8px] font-bold border border-blue-400/20">
-                                        {content.tietLT.toFixed(1)} tiết LT
+                                        {content.tietLT.toFixed(2)} tiết LT
                                       </span>
                                     )}
-                                    {content.tietTH > 0 && (
+                                    {(content.tietTH > 0) && (
                                       <span className="px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-200 text-[8px] font-bold border border-amber-400/20">
-                                        {content.tietTH.toFixed(1)} tiết TH/KT
+                                        {content.tietTH.toFixed(2)} tiết TH/KT
                                       </span>
                                     )}
                                   </div>
@@ -466,14 +465,13 @@ export default function Home() {
 
                           <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between">
                             <span className={`text-[10px] font-bold ${config.sub}`}>
-                              Tổng {session.totalPeriods} tiết • {session.totalPeriods * 45} phút
+                              Tổng {session.totalPeriods.toFixed(2)} tiết • {Math.round(session.totalPeriods * 45)} phút
                             </span>
-                            <div className={`w-7 h-7 rounded-full flex items-center justify-center bg-white/5 border border-white/10 group-hover:bg-white/20 transition-all`}>
+                            <div className="w-7 h-7 rounded-full flex items-center justify-center bg-white/5 border border-white/10 group-hover:bg-white/20 transition-all">
                               <ArrowRight className="w-3.5 h-3.5 text-white/50" />
                             </div>
                           </div>
 
-                          {/* Hover effect light */}
                           <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/5 to-white/0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
                         </div>
                       );

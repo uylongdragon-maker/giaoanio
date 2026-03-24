@@ -22,9 +22,8 @@ export default function SyllabusPreviewTable({ lessons, onConfirm, onCancel, onC
       id: `lesson-new-${Date.now()}`,
       name: '',
       subItems: '',
-      tietLT: 0,
-      tietTH: 0,
-      totalPeriods: 0,
+      gioLT: 0,
+      gioTH: 0,
       status: 'Chưa soạn'
     };
     const updated = [...localLessons, newLesson];
@@ -38,10 +37,10 @@ export default function SyllabusPreviewTable({ lessons, onConfirm, onCancel, onC
     if (onChange) onChange(updated);
   };
 
-  const totalLT = localLessons.reduce((sum, l) => sum + (parseFloat(l.tietLT) || 0), 0);
-  const totalTH = localLessons.reduce((sum, l) => sum + (parseFloat(l.tietTH) || 0), 0);
-  // Quy đổi TH theo hệ số 1.33 cho summary
-  const totalTHConverted = totalTH * 1.33;
+  const totalLT = localLessons.reduce((sum, l) => sum + (parseFloat(l.gioLT ?? l.tietLT) || 0), 0);
+  const totalTH = localLessons.reduce((sum, l) => sum + (parseFloat(l.gioTH ?? l.tietTH) || 0), 0);
+  // Quy đổi TH theo hệ số 60/45 cho summary dự kiến
+  const totalTHConverted = totalTH * (60 / 45);
   const totalPeriods = totalLT + totalTHConverted;
 
   return (
@@ -54,7 +53,7 @@ export default function SyllabusPreviewTable({ lessons, onConfirm, onCancel, onC
               <BookOpen className="w-6 h-6" />
               Bản Phân phối Chương trình (Giao diện Pro)
             </h2>
-            <p className="text-slate-500 text-sm font-medium mt-1 uppercase tracking-widest text-[10px]">Quy đổi: LT: 1.0 | TH/KT: 1.33 (Tự động)</p>
+            <p className="text-slate-500 text-sm font-medium mt-1 uppercase tracking-widest text-[10px]">Đơn vị tính: GIỜ HỆ SỐ 1.0 (Khớp theo file Word của trường)</p>
           </div>
           <div className="flex gap-3">
             <button 
@@ -82,8 +81,8 @@ export default function SyllabusPreviewTable({ lessons, onConfirm, onCancel, onC
                 <th className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400 text-center w-12">STT</th>
                 <th className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400 w-1/4">Tên bài học/Chương</th>
                 <th className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Đề mục chi tiết (cách nhau bởi dấu phẩy)</th>
-                <th className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400 text-center w-24">LT (Giờ)</th>
-                <th className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400 text-center w-24">TH (Giờ)</th>
+                <th className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400 text-center w-24">Giờ LT</th>
+                <th className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400 text-center w-24">Giờ TH/KT</th>
                 <th className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400 text-center w-12"></th>
               </tr>
             </thead>
@@ -113,8 +112,8 @@ export default function SyllabusPreviewTable({ lessons, onConfirm, onCancel, onC
                     <input 
                       type="number"
                       step="0.5"
-                      value={lesson.tietLT}
-                      onChange={(e) => handleUpdate(idx, 'tietLT', e.target.value)}
+                      value={lesson.gioLT ?? lesson.tietLT ?? 0}
+                      onChange={(e) => handleUpdate(idx, 'gioLT', e.target.value)}
                       className="w-16 bg-blue-50/50 border border-blue-100 rounded-xl px-2 py-2 text-center text-sm font-black text-blue-600 outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                     />
                   </td>
@@ -122,9 +121,9 @@ export default function SyllabusPreviewTable({ lessons, onConfirm, onCancel, onC
                     <input 
                       type="number"
                       step="0.5"
-                      value={lesson.tietTH}
-                      onChange={(e) => handleUpdate(idx, 'tietTH', e.target.value)}
-                      className="w-16 bg-amber-50/50 border border-amber-100 rounded-xl px-2 py-2 text-center text-sm font-black text-amber-600 outline-none focus:ring-2 focus:ring-amber-500 transition-all"
+                      value={lesson.gioTH ?? lesson.tietTH ?? 0}
+                      onChange={(e) => handleUpdate(idx, 'gioTH', e.target.value)}
+                      className="w-16 bg-emerald-50/50 border border-emerald-100 rounded-xl px-2 py-2 text-center text-sm font-black text-emerald-600 outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
                     />
                   </td>
                   <td className="px-4 py-3 text-center">
@@ -142,7 +141,7 @@ export default function SyllabusPreviewTable({ lessons, onConfirm, onCancel, onC
         </div>
 
         {/* Action Bottom */}
-        <div className="p-4 border-t border-slate-100 bg-white/50">
+        <div className="p-4 border-t border-slate-100 bg-white/50 flex flex-col items-center gap-3">
           <button 
             onClick={addRow}
             className="w-full py-3 rounded-2xl border-2 border-dashed border-slate-200 text-slate-400 hover:border-indigo-400 hover:text-indigo-500 hover:bg-indigo-50/30 transition-all font-bold text-sm flex items-center justify-center gap-2 group"
@@ -150,6 +149,9 @@ export default function SyllabusPreviewTable({ lessons, onConfirm, onCancel, onC
             <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform" />
             Thêm Bài học/Hoạt động mới
           </button>
+          <p className="text-[10px] text-rose-500 font-bold italic">
+            * (Lưu ý: Hệ thống sẽ tự động quy đổi Giờ TH sang Tiết TH theo tỷ lệ x60/45 khi xuất Lịch trình chi tiết)
+          </p>
         </div>
 
         {/* Footer Summary */}
@@ -159,18 +161,18 @@ export default function SyllabusPreviewTable({ lessons, onConfirm, onCancel, onC
               <Clock className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-[10px] uppercase font-black tracking-widest text-slate-400">Tổng Lý Thuyết</p>
-              <p className="text-xl font-black text-blue-700">{totalLT.toFixed(1)} <span className="text-xs">tiết</span></p>
+              <p className="text-[10px] uppercase font-black tracking-widest text-slate-400">Tổng Giờ LT</p>
+              <p className="text-xl font-black text-blue-700">{totalLT.toFixed(1)} <span className="text-xs">giờ</span></p>
             </div>
           </div>
           
           <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
-            <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center text-amber-600">
+            <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center text-emerald-600">
               <Activity className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-[10px] uppercase font-black tracking-widest text-slate-400">Tổng Thực Hành/KT</p>
-              <p className="text-xl font-black text-amber-700">{totalTHConverted.toFixed(1)} <span className="text-xs">tiết</span></p>
+              <p className="text-[10px] uppercase font-black tracking-widest text-slate-400">Tổng Giờ TH/KT</p>
+              <p className="text-xl font-black text-emerald-700">{totalTH.toFixed(1)} <span className="text-xs">giờ</span></p>
             </div>
           </div>
 

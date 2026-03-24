@@ -17,8 +17,8 @@ export function generateTimetable(syllabus, startDate, dayConfigs, holidayList =
   let allSteps = [];
 
   syllabus.forEach((item, idx) => {
-    const hLt = parseFloat(item.tietLT) || 0;
-    const hTh = parseFloat(item.tietTH) || 0;
+    const hLt = parseFloat(item.gioLT ?? item.tietLT) || 0;
+    const hTh = parseFloat(item.gioTH ?? item.tietTH) || 0;
     
     // Đề mục chi tiết: tách theo dấu phẩy
     let subList = (item.subItems || item.deMuc || "")
@@ -31,9 +31,10 @@ export function generateTimetable(syllabus, startDate, dayConfigs, holidayList =
     }
 
     // Tính số tiết cho mỗi đề mục con
-    // Quy đổi: LT giữ nguyên, TH nhân 1.33 (theo prototype)
+    // Quy đổi từ GIỜ sang TIẾT: LT (1:1), TH (x 60/45)
+    // Phân bổ đều cho các đề mục con
     const pPerLt = hLt / subList.length;
-    const pPerTh = (hTh * 1.33) / subList.length;
+    const pPerTh = (hTh * (60 / 45)) / subList.length;
 
     subList.forEach(s => {
       // Thêm phần Lý thuyết của đề mục này
