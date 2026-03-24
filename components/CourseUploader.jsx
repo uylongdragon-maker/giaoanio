@@ -66,7 +66,7 @@ export default function CourseUploader({ onCourseAnalyzed, apiKey, modelType }) 
 
       showToast("Đang gửi cho AI phân tích...", "info");
 
-      const res = await fetch('/api/generate', {
+      const res = await fetch('/api/analyze-file', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -81,30 +81,21 @@ BẮT BUỘC trả về JSON Array, KHÔNG có wrapper, KHÔNG có markdown:
       const data = await res.json();
       if (!res.ok) throw new Error(data.error?.message || "Lỗi AI bóc tách");
 
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-      const cleanJson = text.replace(/```(json)?\n?|```/g, '').trim();
+      const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      
+      // GỌT VỎ MARKDOWN (QUAN TRỌNG)
+      const cleanJson = responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
       
       try {
         const parsed = JSON.parse(cleanJson);
-        
-        // Handle both Array format (new) and Object format {lessons:[]} (old)
         const lessonsArray = Array.isArray(parsed) ? parsed : (parsed.lessons || []);
         return NextResponse.json({ lessons: lessonsArray }, { status: 200 });
       } catch (e) {
-        // Fallback: try to extract array or object
-        const startArr = cleanJson.indexOf('[');
-        const endArr = cleanJson.lastIndexOf(']');
-        const startObj = cleanJson.indexOf('{');
-        const endObj = cleanJson.lastIndexOf('}');
-        
-        if (startArr !== -1 && endArr !== -1) {
-          const extracted = JSON.parse(cleanJson.substring(startArr, endArr + 1));
-          return NextResponse.json({ lessons: extracted }, { status: 200 });
-        } else if (startObj !== -1 && endObj !== -1) {
-          const extracted = JSON.parse(cleanJson.substring(startObj, endObj + 1));
-          return NextResponse.json(extracted, { status: 200 });
-        }
-        throw e;
+        console.error("Lỗi Parse JSON. Chuỗi gốc từ AI:", responseText);
+        return NextResponse.json({ 
+          error: "Lỗi AI/Parse", 
+          details: "Dữ liệu AI trả về sai định dạng JSON." 
+        }, { status: 500 });
       }
     }
 
@@ -220,6 +211,7 @@ YÊU CẦU CỐT LÕI (BẮT BUỘC TUÂN THỦ 100%):
         body: JSON.stringify({
           contents: [{ role: "user", parts: [{ text: finalPrompt }] }],
           generationConfig: {
+            responseMimeType: "application/json",
             temperature: 0.7,
             maxOutputTokens: 8192
           }
@@ -303,7 +295,7 @@ YÊU CẦU CỐT LÕI (BẮT BUỘC TUÂN THỦ 100%):
 
     // ── NẾU LÀ MODE SIMULATE HOẶC GENERATE, PARSE THỬ TRƯỚC KHI TRẢ VỀ ĐỂ ĐẢM BẢO CHUẨN JSON ──
     try {
-      let cleanJson = responseText.replace(/```(json)?\n?|```/g, '').trim();
+      let cleanJson = responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
       const st = cleanJson.indexOf('{');
       const en = cleanJson.lastIndexOf('}');
       if (st !== -1 && en !== -1) cleanJson = cleanJson.substring(st, en + 1);
