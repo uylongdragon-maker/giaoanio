@@ -323,6 +323,9 @@ YÊU CẦU CỐT LÕI (BẮT BUỘC TUÂN THỦ 100%):
 
   } catch (error) {
     console.error("Lỗi 500 tại Server:", error);
-    return NextResponse.json({ error: `Lỗi Backend cục bộ: ${error.message}` }, { status: 500 });
+    return NextResponse.json({ 
+      error: "Lỗi AI/Parse", 
+      details: error.message 
+    }, { status: 500 });
   }
 }

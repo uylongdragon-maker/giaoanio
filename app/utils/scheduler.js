@@ -1,109 +1,126 @@
 /**
- * Hàm phân bổ danh sách bài học vào lịch giảng dạy (Asymmetric, Cross-day)
- * @param {Array} syllabus - Mảng bài học, mỗi phần tử cần có: tenBai/name và soTiet/totalPeriods.
- * @param {String} startDate - Ngày bắt đầu (ISO string).
- * @param {Object} dayConfigs - Cấu hình tiết/ngày. VD: { 2: 2, 5: 3 } (Thứ 2: 2 tiết, Thứ 5: 3 tiết)
- * @returns {Array} sessions - Mảng các buổi học.
+ * Hàm phân bổ danh sách bài học vào lịch giảng dạy (Pro Edition)
+ * Theo thuật toán: Chia nhỏ đề mục -> Rải tiết theo pLimit -> Né ngày nghỉ
+ * 
+ * @param {Array} syllabus - Mảng bài học từ Editable Table.
+ * @param {String} startDate - Ngày bắt đầu (YYYY-MM-DD).
+ * @param {Object} dayConfigs - Cấu hình tiết/ngày. { 2: 4, 3: 0, ... }
+ * @param {Array} holidayList - Mảng chuỗi ngày nghỉ (Date.toDateString()).
+ * @returns {Array} sessions - Mảng các buổi học hoàn chỉnh.
  */
-export function generateTimetable(syllabus, startDate, dayConfigs) {
-  if (!syllabus || syllabus.length === 0) return [];
+export function generateTimetable(syllabus, startDate, dayConfigs, holidayList = []) {
+  if (!syllabus || syllabus.length === 0 || !startDate) return [];
 
-  const validDays = Object.keys(dayConfigs)
-    .map(Number)
-    .filter(d => dayConfigs[d] > 0);
+  // 1. CHUẨN BỊ TẤT CẢ CÁC BƯỚC (STEPS)
+  // Mỗi bài học được chia thành các đề mục con (sub-items).
+  // Mỗi đề mục con có phần LT và phần TH riêng.
+  let allSteps = [];
 
-  if (!startDate || validDays.length === 0) return [];
-
-  // ── Helper: Advance currentDate to the next valid teaching day ──
-  const advanceToNextValidDay = (date) => {
-    const d = new Date(date);
-    // Max 14 days to find next valid day (safety)
-    for (let i = 0; i < 14; i++) {
-      if (validDays.includes(d.getDay())) return d;
-      d.setDate(d.getDate() + 1);
-    }
-    return d;
-  };
-
-  // ── Normalize syllabus: clone and map to a consistent shape ──
-  const remaining = syllabus.map((ls, idx) => ({
-    lessonName: ls.name || ls.tenBai || `Bài ${idx + 1}`,
-    ltLeft: Number(ls.tietLT || 0),
-    thLeft: Number(ls.tietTH || 0),
-    originalLesson: ls,
-  })).filter(ls => (ls.ltLeft + ls.thLeft) > 0);
-
-  const sessions = [];
-  let sessionCounter = 1;
-  let currentDate = advanceToNextValidDay(new Date(startDate));
-
-  // ── Main while-loop: keep scheduling until no lessons remain ──
-  while (remaining.length > 0) {
-    const dayOfWeek = currentDate.getDay();
-    const periodsAllowed = dayConfigs[dayOfWeek] || 0;
-
-    if (periodsAllowed === 0) {
-      currentDate.setDate(currentDate.getDate() + 1);
-      currentDate = advanceToNextValidDay(currentDate);
-      continue;
+  syllabus.forEach((item, idx) => {
+    const hLt = parseFloat(item.tietLT) || 0;
+    const hTh = parseFloat(item.tietTH) || 0;
+    
+    // Đề mục chi tiết: tách theo dấu phẩy
+    let subList = (item.subItems || item.deMuc || "")
+      .split(',')
+      .map(s => s.trim())
+      .filter(s => s !== "");
+    
+    if (subList.length === 0) {
+      subList = [item.name || item.tenBai || `Bài ${idx + 1}`];
     }
 
-    const sessionContents = [];
-    let periodsFilledToday = 0;
+    // Tính số tiết cho mỗi đề mục con
+    // Quy đổi: LT giữ nguyên, TH nhân 1.33 (theo prototype)
+    const pPerLt = hLt / subList.length;
+    const pPerTh = (hTh * 1.33) / subList.length;
 
-    // ── Fill this day's session with lessons until the quota is met ──
-    while (periodsFilledToday < periodsAllowed && remaining.length > 0) {
-      const lesson = remaining[0];
-      const slotsLeft = periodsAllowed - periodsFilledToday;
-      
-      let ltToTake = 0;
-      let thToTake = 0;
-
-      // 1. Take LT first
-      if (lesson.ltLeft > 0) {
-        ltToTake = Math.min(lesson.ltLeft, slotsLeft);
-        lesson.ltLeft -= ltToTake;
-      }
-
-      // 2. If slots remaining, take TH
-      if (ltToTake < slotsLeft && lesson.thLeft > 0) {
-        thToTake = Math.min(lesson.thLeft, slotsLeft - ltToTake);
-        lesson.thLeft -= thToTake;
-      }
-
-      const totalTaken = ltToTake + thToTake;
-      
-      if (totalTaken > 0) {
-        sessionContents.push({
-          lessonName: lesson.lessonName,
-          periods: totalTaken,
-          tietLT: ltToTake,
-          tietTH: thToTake,
-          originalLesson: lesson.originalLesson,
+    subList.forEach(s => {
+      // Thêm phần Lý thuyết của đề mục này
+      if (pPerLt > 0) {
+        allSteps.push({
+          parentTitle: item.name || item.tenBai,
+          subTitle: s,
+          type: 'LT',
+          remaining: pPerLt,
+          originalItem: item
         });
-        periodsFilledToday += totalTaken;
       }
-
-      // If lesson is fully scheduled, remove from queue
-      if (lesson.ltLeft === 0 && lesson.thLeft === 0) {
-        remaining.shift();
+      // Thêm phần Thực hành của đề mục này (Xen kẽ ngay sau LT)
+      if (pPerTh > 0) {
+        allSteps.push({
+          parentTitle: item.name || item.tenBai,
+          subTitle: s,
+          type: 'TH',
+          remaining: pPerTh,
+          originalItem: item
+        });
       }
-    }
+    });
+  });
 
-    if (sessionContents.length > 0) {
-      sessions.push({
+  // 2. RẢI CÁC BƯỚC VÀO LỊCH (SESSIONS)
+  let sessions = [];
+  let currentDate = new Date(startDate);
+  let stepIdx = 0;
+  let sessionCounter = 1;
+
+  // Giới hạn an toàn 500 buổi để tránh vòng lặp vô tận
+  while (stepIdx < allSteps.length && sessions.length < 500) {
+    const dayOfWeek = currentDate.getDay();
+    const pLimit = dayConfigs[dayOfWeek] || 0;
+    const dateStr = currentDate.toDateString();
+
+    // Nếu là ngày dạy và không phải ngày nghỉ
+    if (pLimit > 0 && !holidayList.includes(dateStr)) {
+      let currentSession = {
         id: `session-${sessionCounter}`,
         sessionNumber: sessionCounter,
-        date: new Date(currentDate).toISOString(),
-        totalPeriods: periodsFilledToday,
-        status: 'pending',
-        contents: sessionContents,
-      });
+        date: currentDate.toISOString(),
+        contents: [],
+        totalPeriods: 0,
+        tietLT: 0,
+        tietTH: 0,
+        status: 'pending'
+      };
+
+      let spaceUsed = 0;
+
+      while (spaceUsed < pLimit - 0.01 && stepIdx < allSteps.length) {
+        let step = allSteps[stepIdx];
+        let availableSpace = pLimit - spaceUsed;
+        let take = Math.min(step.remaining, availableSpace);
+
+        // Ghi nhận nội dung cho buổi này
+        currentSession.contents.push({
+          lessonName: step.parentTitle,
+          subItem: step.subTitle,
+          periods: take,
+          type: step.type,
+          tietLT: step.type === 'LT' ? take : 0,
+          tietTH: step.type === 'TH' ? take : 0,
+          originalLesson: step.originalItem
+        });
+
+        if (step.type === 'LT') currentSession.tietLT += take;
+        else currentSession.tietTH += take;
+
+        spaceUsed += take;
+        step.remaining -= take;
+
+        // Nếu bước này đã hết tiết, chuyển sang bước tiếp theo
+        if (step.remaining <= 0.01) {
+          stepIdx++;
+        }
+      }
+
+      currentSession.totalPeriods = spaceUsed;
+      sessions.push(currentSession);
       sessionCounter++;
     }
 
+    // Sang ngày tiếp theo
     currentDate.setDate(currentDate.getDate() + 1);
-    currentDate = advanceToNextValidDay(currentDate);
   }
 
   return sessions;

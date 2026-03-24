@@ -52,16 +52,31 @@ export default function Home() {
   }, [aiConfig, courseData, isClient]);
 
   const handleCourseAnalyzed = (lessons) => {
-    setParsedSyllabus(lessons);
+    // Chèn ID duy nhất cho mỗi bài bóc tách được để dễ quản lý trong bảng edit
+    const initializedLessons = lessons.map((l, i) => ({
+      ...l,
+      id: l.id || `lesson-${Date.now()}-${i}`,
+      subItems: l.subItems || l.deMuc || ""
+    }));
+    setParsedSyllabus(initializedLessons);
     setSetupStep('preview');
+  };
+
+  const handleSyllabusChange = (updatedLessons) => {
+    setParsedSyllabus(updatedLessons);
   };
 
   const handlePreviewConfirm = () => {
     setSetupStep('config');
   };
 
-  const handleScheduleComplete = (sessions) => {
-    setCourseData({ lessons: parsedSyllabus, schedule: sessions });
+  const handleScheduleComplete = (startDate, dayConfigs, holidayList) => {
+    const sessions = generateTimetable(parsedSyllabus, startDate, dayConfigs, holidayList);
+    setCourseData({ 
+      lessons: parsedSyllabus, 
+      schedule: sessions,
+      config: { startDate, dayConfigs, holidayList }
+    });
     setSetupStep('hub');
   };
 
@@ -173,12 +188,10 @@ export default function Home() {
                 setAiConfig={setAiConfig}
                 sessionData={{
                   id: selectedSession.id,
-                  title: selectedSession.contents.map(c => {
-                    const isPartial = c.originalLesson && c.periods < (c.originalLesson.totalPeriods || c.originalLesson.soTiet || 0);
-                    return isPartial ? `${c.lessonName} (một phần)` : c.lessonName;
-                  }).join(' & '),
+                  title: selectedSession.contents.map(c => c.subItem || c.lessonName).join(', '),
+                  type: selectedSession.tietLT > 0 && selectedSession.tietTH > 0 ? "Tích hợp" : (selectedSession.tietLT > 0 ? "Lý thuyết" : "Thực hành"),
                   periods: selectedSession.totalPeriods,
-                  totalMinutes: selectedSession.totalPeriods * 45
+                  totalMinutes: Math.round(selectedSession.totalPeriods * 45)
                 }}
                 courseData={courseData}
                 onComplete={handleWizardComplete}
@@ -225,6 +238,7 @@ export default function Home() {
                   lessons={parsedSyllabus} 
                   onConfirm={handlePreviewConfirm} 
                   onCancel={() => setSetupStep('upload')} 
+                  onChange={handleSyllabusChange}
                 />
               </div>
             )}
@@ -299,7 +313,7 @@ export default function Home() {
                         <div>
                           <p className="text-xs font-bold text-slate-400 mb-2">{formatDate(upNextSession.date)}</p>
                           <h3 className="font-bold text-white text-base leading-snug line-clamp-3 mb-4">
-                            {upNextSession.contents.map(c => c.lessonName).join(' & ')}
+                            {upNextSession.contents.map(c => c.subItem || c.lessonName).join(' • ')}
                           </h3>
                         </div>
                         <button 
@@ -428,18 +442,23 @@ export default function Home() {
                             
                             {/* LT/TH Badges */}
                             <div className="mt-2 flex flex-wrap gap-1.5">
-                              {session.contents.map((content, idx) => (
-                                <div key={idx} className="flex flex-wrap gap-1">
-                                  {content.tietLT > 0 && (
-                                    <span className="px-1.5 py-0.5 rounded-md bg-blue-500/20 text-blue-200 text-[9px] font-bold border border-blue-400/20 backdrop-blur-sm">
-                                      {content.tietLT} tiết LT
-                                    </span>
-                                  )}
-                                  {content.tietTH > 0 && (
-                                    <span className="px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-200 text-[9px] font-bold border border-amber-400/20 backdrop-blur-sm">
-                                      {content.tietTH} tiết TH/KT
-                                    </span>
-                                  )}
+                              {session.contents.map((content, sidx) => (
+                                <div key={sidx} className="flex flex-col gap-1 w-full border-b border-white/5 pb-2 mb-2 last:border-0 last:mb-0">
+                                  <p className={`text-[10px] font-bold truncate ${config.text}`}>
+                                     {content.subItem || content.lessonName}
+                                  </p>
+                                  <div className="flex gap-1">
+                                    {content.tietLT > 0 && (
+                                      <span className="px-1.5 py-0.5 rounded-md bg-blue-500/20 text-blue-200 text-[8px] font-bold border border-blue-400/20">
+                                        {content.tietLT.toFixed(1)} tiết LT
+                                      </span>
+                                    )}
+                                    {content.tietTH > 0 && (
+                                      <span className="px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-200 text-[8px] font-bold border border-amber-400/20">
+                                        {content.tietTH.toFixed(1)} tiết TH/KT
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
                               ))}
                             </div>
