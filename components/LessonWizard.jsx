@@ -20,7 +20,8 @@ export default function LessonWizard({ aiConfig, setAiConfig, sessionData, cours
     totalMinutes: sessionData?.totalMinutes || 45,
     tietLT: 0,
     tietTH: 0,
-    notes: ''
+    notes: '',
+    topics: sessionData?.topics || []
   });
 
   // Calculate session-level totals for LT/TH when sessionData changes

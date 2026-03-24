@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { UploadCloud, File, Loader2, CheckCircle2 } from 'lucide-react';
+import { UploadCloud, File, Loader2, CheckCircle2, Settings } from 'lucide-react';
 
-export default function CourseUploader({ onCourseAnalyzed, apiKey, modelType }) {
+export default function CourseUploader({ onCourseAnalyzed, apiKey, modelType, onOpenSettings }) {
   const [file, setFile] = useState(null);
   const [isReading, setIsReading] = useState(false);
   const [toast, setToast] = useState(null);
@@ -114,6 +114,13 @@ export default function CourseUploader({ onCourseAnalyzed, apiKey, modelType }) 
 
   return (
     <div className="bg-white/70 backdrop-blur-xl rounded-[28px] p-6 shadow-sm border border-white/80 relative">
+      <button 
+        onClick={onOpenSettings}
+        className="absolute top-6 right-6 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100/50 hover:bg-white/80 border border-slate-200/50 hover:border-indigo-200 transition-all text-[10px] font-bold text-slate-500 hover:text-indigo-600 backdrop-blur-sm shadow-sm z-10"
+      >
+        <Settings className="w-3.5 h-3.5" /> Cài đặt API Key
+      </button>
+
       {/* Toast Notification */}
       {toast && (
         <div className={`absolute -top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full whitespace-nowrap text-xs font-bold shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-300 ${

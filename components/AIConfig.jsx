@@ -33,7 +33,7 @@ export default function AIConfig({ onConfigSaved }) {
         setModelType(config.modelType || 'gemini-3-flash-preview');
         setMaskedKey(maskKey(config.apiKey || ''));
         setSaved(true);
-        if (onConfigSaved) onConfigSaved(config);
+        // if (onConfigSaved) onConfigSaved(config);
       }
     } catch {}
   }, []);

@@ -196,7 +196,8 @@ export default function Home() {
                   title: selectedSession.contents.map(c => c.subItem || c.lessonName).join(', '),
                   type: selectedSession.tietLT > 0 && selectedSession.tietTH > 0 ? "Tích hợp" : (selectedSession.tietLT > 0 ? "Lý thuyết" : "Thực hành"),
                   periods: selectedSession.totalPeriods,
-                  totalMinutes: Math.round(selectedSession.totalPeriods * 45)
+                  totalMinutes: Math.round(selectedSession.totalPeriods * 45),
+                  topics: selectedSession.contents.map(c => c.subItem).filter(Boolean)
                 }}
                 courseData={courseData}
                 onComplete={handleWizardComplete}
@@ -232,7 +233,12 @@ export default function Home() {
             {/* STEP 1: Upload */}
             {setupStep === 'upload' && (
               <div className="max-w-3xl mx-auto mt-12 bg-white/10 backdrop-blur-3xl rounded-[32px] p-2 border border-white/10 shadow-[0_8px_32px_rgb(0,0,0,0.3)]">
-                <CourseUploader apiKey={aiConfig?.apiKey} modelType={aiConfig?.modelType} onCourseAnalyzed={handleCourseAnalyzed} />
+                <CourseUploader 
+                  apiKey={aiConfig?.apiKey} 
+                  modelType={aiConfig?.modelType} 
+                  onCourseAnalyzed={handleCourseAnalyzed} 
+                  onOpenSettings={() => setShowConfig(true)}
+                />
               </div>
             )}
 

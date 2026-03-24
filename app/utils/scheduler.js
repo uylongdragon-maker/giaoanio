@@ -17,10 +17,16 @@ export function generateTimetable(syllabus, startDate, dayConfigs, holidayList =
   let allSteps = [];
 
   syllabus.forEach((item, idx) => {
-    let hLt = parseFloat(item.gioLT) || 0;
-    let hTh = parseFloat(item.gioTH) || 0;
+    const hLt = parseFloat(item.gioLT) || 0;
+    const hTh = parseFloat(item.gioTH) || 0;
+
+    // 1.1 Tính "Chi phí" (Cost) - số Tiết cho Bài này
+    // Quy đổi từ GIỜ sang TIẾT: LT (1:1), TH (x 60/45)
+    // Dùng Math.round theo yêu cầu để đảm bảo số tiết nguyên hoặc .5 hợp lý
+    const totalP_LT = hLt;
+    const totalP_TH = Math.round(hTh * 60 / 45);
     
-    // Đề mục chi tiết: tách theo dấu phẩy
+    // 1.2 Băm nhỏ Đề mục
     let subList = (item.deMuc || "")
       .split(',')
       .map(s => s.trim())
@@ -30,30 +36,28 @@ export function generateTimetable(syllabus, startDate, dayConfigs, holidayList =
       subList = [item.tenBai || `Bài ${idx + 1}`];
     }
 
-    // Tính số tiết cho mỗi đề mục con
-    // Quy đổi từ GIỜ sang TIẾT: LT (1:1), TH (x 60/45)
-    // Phân bổ đều cho các đề mục con
-    const pPerLt = hLt / subList.length;
-    const pPerTh = (hTh * (60 / 45)) / subList.length;
+    // 1.3 Chia đều cost cho từng đề mục
+    const costPerLt = totalP_LT / subList.length;
+    const costPerTh = totalP_TH / subList.length;
 
     subList.forEach(s => {
       // Thêm phần Lý thuyết của đề mục này
-      if (pPerLt > 0) {
+      if (costPerLt > 0) {
         allSteps.push({
           parentTitle: item.tenBai,
           subTitle: s,
           type: 'LT',
-          remaining: pPerLt,
+          remaining: costPerLt,
           originalItem: item
         });
       }
-      // Thêm phần Thực hành của đề mục này (Xen kẽ ngay sau LT)
-      if (pPerTh > 0) {
+      // Thêm phần Thực hành của đề mục này (Xen kẽ ngay sau LT của chính nó)
+      if (costPerTh > 0) {
         allSteps.push({
           parentTitle: item.tenBai,
           subTitle: s,
           type: 'TH',
-          remaining: pPerTh,
+          remaining: costPerTh,
           originalItem: item
         });
       }

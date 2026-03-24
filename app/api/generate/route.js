@@ -158,9 +158,12 @@ CHỈ TRẢ VỀ DUY NHẤT MỘT ĐỐI TƯỢNG JSON VỚI FORMAT SAU (KHÔNG 
       const breakdown = (formData?.tietLT || formData?.tietTH) 
         ? `Cấu trúc buổi học: ${formData.tietLT || 0} tiết Lý thuyết, ${formData.tietTH || 0} tiết Thực hành/Kiểm tra.`
         : '';
+      const topicsContext = formData?.topics?.length > 0
+        ? `\nBẮT BUỘC chỉ tập trung giảng dạy các đề mục sau: ${formData.topics.join(', ')}. Tuyệt đối không lan man sang các phần khác của chương.` 
+        : '';
 
       finalPrompt = `Bạn là một Chuyên gia Sư phạm xuất sắc. Hãy soạn giáo án chi tiết CHUẨN PHỤ LỤC 10 bài: "${formData?.lessonName || 'Bài học'}", loại bài: ${formData?.lessonType || 'Lý thuyết'}. 
-Tổng thời gian: ${formData?.totalMinutes || 45} phút. ${breakdown}
+Tổng thời gian: ${formData?.totalMinutes || 45} phút. ${breakdown} ${topicsContext}
 Ghi chú: "${formData?.notes || 'Không có'}".
 Tài nguyên & Năng lực: ${wizardData?.competencies?.join(', ') || 'Chưa định nghĩa'}.
 ${chatContext}

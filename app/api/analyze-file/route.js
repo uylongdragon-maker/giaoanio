@@ -13,39 +13,30 @@ export async function POST(req) {
     let parts;
 
     if (fileData.rawText) {
-      const prompt = `Bạn là chuyên gia bóc tách đề cương. Hãy phân tích bảng HTML và trích xuất TOÀN BỘ dữ liệu. 
-YÊU CẦU MỚI:
-1. Đối với mỗi bài học, hãy tìm các dòng mục lục con/chi tiết nằm bên dưới nó, gộp chúng lại thành một chuỗi, cách nhau bằng dấu phẩy (gán vào key "deMuc"). Nếu không có thì để trống.
-2. gioLT: Số Giờ Lý thuyết nguyên bản.
-3. gioTH: Tổng số Giờ Thực hành + Kiểm tra + Thi.
+      const prompt = `Bạn là chuyên gia bóc tách đề cương. Hãy phân tích bảng HTML và trích xuất TOÀN BỘ dữ liệu thành mảng JSON. 
+YÊU CẦU:
+1. tenBai: Tên chương/bài lớn.
+2. deMuc: Gộp tất cả các dòng mục lục con/chi tiết nằm bên dưới bài đó thành một chuỗi, cách nhau bằng dấu phẩy. VD: '1. Khái niệm, 2. Phân loại'. Nếu không có thì để trống.
+3. gioLT: Số Giờ Lý thuyết nguyên bản.
+4. gioTH: Tổng số Giờ Thực hành + Kiểm tra + Thi.
 TUYỆT ĐỐI KHÔNG QUY ĐỔI. Lấy đúng con số hiển thị trong bảng.
 
 BẮT BUỘC TRẢ VỀ ĐÚNG ĐỊNH DẠNG JSON ARRAY SAU:
 [
-  {
-    "tenBai": "Bài 2: Kỹ thuật máy quay",
-    "deMuc": "1. Giới thiệu máy quay, 2. Ống kính, 3. Cơ bản về quay phim, 4. Ánh sáng",
-    "gioLT": 6,
-    "gioTH": 13
-  },
-  {
-    "tenBai": "Kiểm tra",
-    "deMuc": "Kiểm tra kỹ năng",
-    "gioLT": 0,
-    "gioTH": 1
-  }
+  { "tenBai": "Bài 1", "deMuc": "Mục A, Mục B", "gioLT": 2, "gioTH": 4 },
+  ...
 ]
 
 Nội dung HTML cần phân tích:
 ${fileData.rawText}`;
       parts = [{ text: prompt }];
     } else if (fileData.data && fileData.mimeType) {
-      const prompt = `Bạn là chuyên gia bóc tách đề cương. Hãy đọc tài liệu và trích xuất TOÀN BỘ bài học.
+      const prompt = `Bạn là chuyên gia bóc tách đề cương. Hãy đọc tài liệu và trích xuất TOÀN BỘ bài học thành mảng JSON.
 YÊU CẦU:
-1. Đối với mỗi bài học, hãy tìm các đề mục con/chi tiết nếu có, gộp chúng lại thành một chuỗi, cách nhau bằng dấu phẩy (gán vào key "deMuc").
-2. tenBai: Tên chương/bài lớn.
+1. tenBai: Tên chương/bài lớn.
+2. deMuc: Tìm các đề mục con/chi tiết nếu có, gộp chúng lại thành một chuỗi, cách nhau bằng dấu phẩy. VD: '1. Khái niệm, 2. Phân loại'.
 3. gioLT: Số Giờ Lý thuyết nguyên bản.
-4. gioTH: Tổng Giờ Thực hành + Kiểm tra + Thi.
+4. gioTH: Tổng Giờ Thực hành + Kiểm tra + Thi (Hệ số 1.0).
 TUYỆT ĐỐI KHÔNG QUY ĐỔI. Lấy đúng con số hiển thị trong tài liệu.
 
 BẮT BUỘC trả về JSON Array:
