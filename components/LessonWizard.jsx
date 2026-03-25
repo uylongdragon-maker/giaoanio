@@ -9,6 +9,7 @@ import CompetencySelector from '@/components/CompetencySelector';
 import SimulationBox from '@/components/SimulationBox';
 import { Sparkles, ChevronRight, ChevronLeft, Bot, Loader2, CheckCircle2, FileText, MonitorSmartphone, Cpu, Presentation, ArrowLeft } from 'lucide-react';
 
+
 export default function LessonWizard({ aiConfig, setAiConfig, sessionData, courseData, onComplete, onCancel }) {
   const resultRef = useRef(null);
 
@@ -107,10 +108,16 @@ export default function LessonWizard({ aiConfig, setAiConfig, sessionData, cours
         }),
       });
 
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || `Lỗi server: ${response.status}`);
+      let data = {};
+      try {
+        data = await response.json();
+      } catch (e) {
+        console.error("[LessonWizard] Lỗi parse JSON:", e);
+      }
+
+      if (!response.ok) throw new Error(data.details || data.error || `Lỗi hệ thống (HTTP ${response.status})`);
       
-      let rawOutput = data.result;
+      let rawOutput = data.text;
       if (!rawOutput) throw new Error('AI không trả về dữ liệu hợp lệ. Vui lòng thử lại.');
 
       let cleanJson = "";

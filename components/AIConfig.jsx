@@ -5,8 +5,13 @@ import { Settings, Eye, EyeOff, CheckCircle, ChevronDown, KeyRound, Sparkles } f
 
 const MODELS = [
   // ── Google Gemini ──────────────────────────────────
-  { id: 'gemini-3-flash-preview', modelId: 'gemini-3-flash-preview', label: 'Google Gemini 3.0 Flash (⚡ Cực nhanh)', icon: '⚡', provider: 'gemini' },
-  { id: 'gemini-3.1-pro-preview',  modelId: 'gemini-3.1-pro-preview',  label: 'Google Gemini 3.1 Pro (🧠 Thông minh nhất)',   icon: '🤖', provider: 'gemini' },
+  { id: 'gemini-3.1-pro-preview',   modelId: 'gemini-3.1-pro-preview',   label: 'Gemini 3.1 Pro (🧠 Thông minh nhất)',   icon: '🤖', provider: 'gemini' },
+  { id: 'gemini-3.0-flash-preview', modelId: 'gemini-3-flash-preview', label: 'Gemini 3.0 Flash (⚡ Cực nhanh)',      icon: '⚡', provider: 'gemini' },
+  { id: 'gemini-2.5-pro',           modelId: 'gemini-2.5-pro',           label: 'Gemini 2.5 Pro (🚀 Thế hệ mới)',     icon: '🚀', provider: 'gemini' },
+  { id: 'gemini-2.5-flash',         modelId: 'gemini-2.5-flash',         label: 'Gemini 2.5 Flash (🔥 Hiệu năng)',    icon: '🔥', provider: 'gemini' },
+  { id: 'gemini-2.0-flash',         modelId: 'gemini-2.0-flash',         label: 'Gemini 2.0 Flash (✨ Cân bằng)',     icon: '✨', provider: 'gemini' },
+  { id: 'deep-research-pro-preview-12-2025', modelId: 'deep-research-pro-preview-12-2025', label: 'Deep Research (🔍 Chuyên sâu)', icon: '🔍', provider: 'gemini' },
+  { id: 'gemma-3-27b-it',           modelId: 'gemma-3-27b-it',           label: 'Gemma 3 27B (🌐 Cởi mở)',           icon: '🌐', provider: 'gemini' },
   // ── OpenAI ─────────────────────────────────────────
   { id: 'openai-gpt4o-mini', modelId: 'gpt-4o-mini',                label: 'OpenAI GPT-4o Mini',                   icon: '✨', provider: 'openai' },
   { id: 'openai-gpt4o',      modelId: 'gpt-4o',                     label: 'OpenAI GPT-4o',                        icon: '🌟', provider: 'openai' },
@@ -17,7 +22,7 @@ const MODELS = [
 const STORAGE_KEY = 'giao_an_io_config';
 
 export default function AIConfig({ onConfigSaved }) {
-  const [modelType, setModelType] = useState('gemini-3-flash-preview');
+  const [modelType, setModelType] = useState('gemini-3.0-flash-preview');
   const [apiKey, setApiKey] = useState('');
   const [saved, setSaved] = useState(false);
   const [maskedKey, setMaskedKey] = useState('');
@@ -30,7 +35,8 @@ export default function AIConfig({ onConfigSaved }) {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const config = JSON.parse(stored);
-        setModelType(config.modelType || 'gemini-3-flash-preview');
+        let mType = config.modelType || 'gemini-1.5-flash-latest';
+        setModelType(mType);
         setMaskedKey(maskKey(config.apiKey || ''));
         setSaved(true);
         // if (onConfigSaved) onConfigSaved(config);

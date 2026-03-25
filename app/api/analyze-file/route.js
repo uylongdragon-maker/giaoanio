@@ -2,14 +2,15 @@ import { NextResponse } from 'next/server';
 
 export async function POST(req) {
   try {
+    console.log("Đang xử lý API analyze-file...");
     const body = await req.json();
-    const { apiKey, modelType, fileData } = body;
+    const { apiKey, modelType, modelId, fileData } = body;
 
     if (!apiKey) {
       return NextResponse.json({ error: "Thiếu API Key." }, { status: 400 });
     }
 
-    const actualModel = modelType || 'gemini-1.5-flash';
+    const actualModel = modelId || modelType || 'gemini-3.0-flash-preview';
     let parts;
 
     if (fileData.rawText) {
@@ -49,50 +50,81 @@ BẮT BUỘC trả về JSON Array:
       return NextResponse.json({ error: "Không có dữ liệu file để phân tích." }, { status: 400 });
     }
 
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${actualModel}:generateContent?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    // QUY TẮC CHỌN MODEL ROBUST
+    let modelToTry = actualModel;
+    if (modelToTry === 'gemini-1.5-flash') modelToTry = 'gemini-1.5-flash-latest';
+    
+    const tryFetch = async (endpoint, modelId) => {
+      const url = `https://generativelanguage.googleapis.com/${endpoint}/models/${modelId}:generateContent?key=${apiKey.trim()}`;
+      
+      const payload = {
         contents: [{ parts }],
         generationConfig: {
           responseMimeType: "application/json",
           temperature: 0.1,
           maxOutputTokens: 8192
         }
-      })
-    });
+      };
 
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error?.message || "Lỗi AI bóc tách");
+      return await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    };
+
+    // THỬ MODEL ĐƯỢC CHỌN (Ví dụ: gemini-3.0-flash-preview)
+    console.log("Đang gọi Gemini...");
+    let res = await tryFetch('v1beta', actualModel);
+    let data = await res.json();
+
+    if (!res.ok) {
+      console.error("LỖI GOOGLE API:", data);
+      return NextResponse.json({ 
+        success: false, 
+        error: data.error?.message || `Google API trả về lỗi ${res.status}` 
+      }, { status: res.status });
+    }
 
     let responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    if (!responseText) {
+      return NextResponse.json({ 
+        error: "Lỗi AI (Rỗng)", 
+        details: "AI không trả về nội dung. Có thể do nội dung bị chặn hoặc model bận." 
+      }, { status: 500 });
+    }
 
-    // TRÍCH XUẤT JSON ROBUST (Tìm cặp ngoặc đầu và cuối)
+    // TRÍCH XUẤT JSON ROBUST
+    let cleanJson = responseText;
     const firstBracket = responseText.search(/[\[\{]/);
     const lastBracket = Math.max(responseText.lastIndexOf(']'), responseText.lastIndexOf('}'));
     
     if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
-      responseText = responseText.substring(firstBracket, lastBracket + 1);
+      cleanJson = responseText.substring(firstBracket, lastBracket + 1);
     } else {
-      responseText = responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
+      cleanJson = responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
     }
 
     try {
-      if (!responseText) throw new Error("AI trả về kết quả rỗng.");
-      const parsedData = JSON.parse(responseText);
+      const parsedData = JSON.parse(cleanJson);
       const lessonsArray = Array.isArray(parsedData) ? parsedData : (parsedData.lessons || []);
+      
+      if (lessonsArray.length === 0) {
+        throw new Error("Mảng bài học trống.");
+      }
+
       return NextResponse.json({ lessons: lessonsArray }, { status: 200 });
     } catch (parseError) {
       console.error("Lỗi Parse JSON. Chuỗi gốc từ AI:", responseText);
       return NextResponse.json({ 
-        error: "Lỗi AI/Parse", 
-        details: parseError.message,
-        raw: responseText.substring(0, 500) // Trả về một đoạn để debug
+        error: "Lỗi AI (Định dạng)", 
+        details: "AI trả về dữ liệu không đúng cấu trúc JSON mong muốn.",
+        raw: responseText.substring(0, 200)
       }, { status: 500 });
     }
 
   } catch (error) {
-    console.error("Analyze File Error:", error);
-    return NextResponse.json({ error: "Lỗi AI/Parse", details: error.message }, { status: 500 });
+    console.error("LỖI API (analyze-file):", error);
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

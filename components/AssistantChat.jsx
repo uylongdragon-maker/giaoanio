@@ -57,10 +57,16 @@ export default function AssistantChat({ lessonData, apiKey, modelType, onChatUpd
         }),
       });
 
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Lỗi kết nối chat');
+      let data = {};
+      try {
+        data = await response.json();
+      } catch (e) {
+        console.error("[AssistantChat] Lỗi parse JSON:", e);
+      }
 
-      setMessages([...newHistory, { role: 'assistant', content: data.reply }]);
+      if (!response.ok) throw new Error(data.details || data.error || `Lỗi hệ thống (HTTP ${response.status})`);
+
+      setMessages([...newHistory, { role: 'assistant', content: data.text }]);
     } catch (err) {
       setMessages([...newHistory, { role: 'assistant', content: `❌ Lỗi: ${err.message}` }]);
     } finally {

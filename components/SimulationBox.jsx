@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Bot, User, MessageSquare, PlayCircle, Loader2, CheckCircle2 } from 'lucide-react';
 
+
 export default function SimulationBox({ apiKey, modelType, lessonData, onApplySimulation }) {
   const [messages, setMessages] = useState([]);
   const [isSimulating, setIsSimulating] = useState(false);
@@ -35,8 +36,14 @@ export default function SimulationBox({ apiKey, modelType, lessonData, onApplySi
         })
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Lỗi mô phỏng');
+      let data = {};
+      try {
+        data = await res.json();
+      } catch (e) {
+        console.error("[SimulationBox] Lỗi parse JSON:", e);
+      }
+
+      if (!res.ok) throw new Error(data.details || data.error || `Lỗi hệ thống (HTTP ${res.status})`);
 
       // data.dialogue should be [{ role: 'teacher'|'student', content: '...' }]
       if (type === 'visual' && data.html) {

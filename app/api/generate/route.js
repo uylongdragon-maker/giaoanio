@@ -2,14 +2,29 @@ import { NextResponse } from 'next/server';
 
 export async function POST(req) {
   try {
+    console.log("Đang xử lý API generate...");
     const body = await req.json();
-    const { apiKey, modelType, mode, fileData } = body;
+    const { apiKey, modelType, modelId, mode = 'generate', fileData, prompt, history, systemPrompt } = body;
 
     if (!apiKey) {
       return NextResponse.json({ error: "Thiếu API Key." }, { status: 400 });
     }
 
-    const actualModel = modelType || 'gemini-3-flash-preview';
+    const MODEL_MAP = {
+      'gemini-3-flash-preview':   'gemini-3-flash-preview',
+      'gemini-3.0-flash-preview': 'gemini-3-flash-preview',
+      'gemini-3.1-pro-preview':   'gemini-3.1-pro-preview',
+      'gemini-2.5-pro':           'gemini-2.5-pro',
+      'gemini-2.5-flash':         'gemini-2.5-flash',
+      'gemini-2.0-flash':         'gemini-2.0-flash',
+      'openai-gpt4o-mini':        'gpt-4o-mini',
+      'openai-gpt4o':             'gpt-4o',
+      'anthropic-sonnet':         'claude-3-5-sonnet-20240620'
+    };
+
+    const requestedModel = modelId || modelType || 'gemini-2.5-pro';
+    const actualModel = MODEL_MAP[requestedModel] || requestedModel;
+
 
     // ══════════════════════════════════════════════════════════════════════
     // MODE 1: ANALYZE SYLLABUS (Bóc tách phân phối chương trình)
@@ -33,14 +48,11 @@ Nhiệm vụ của bạn:
    - tietLT = Số Giờ Lý thuyết.
    - tietTH = Math.round( (Số Giờ Thực hành + Số Giờ Kiểm tra + Số Giờ Thi) * 60 / 45 ).
 
-BẮT BUỘC TRẢ VỀ ĐÚNG ĐỊNH DẠNG JSON ARRAY. Dưới đây là VÍ DỤ MẪU CHUẨN ĐÚNG VỚI CẤU TRÚC FILE NÀY:
+4. Trích xuất TOÀN BỘ nội dung/đề mục chi tiết của bài học đó vào trường 'deMuc'. Hãy lấy càng chi tiết càng tốt từ cột 'Nội dung' hoặc 'Đề mục'.
+5. BẮT BUỘC trả về JSON Array, KHÔNG có wrapper, KHÔNG có markdown:
 [
-  { "tenBai": "Bài 1: Tổng quan", "tietLT": 3, "tietTH": 0 },
-  { "tenBai": "Bài 2: Kỹ thuật máy quay", "tietLT": 6, "tietTH": 17 },
-  { "tenBai": "Kiểm tra 1", "tietLT": 0, "tietTH": 1 },
-  { "tenBai": "Bài 3: Kỹ thuật chụp ảnh", "tietLT": 6, "tietTH": 17 },
-  { "tenBai": "Kiểm tra 2", "tietLT": 0, "tietTH": 1 },
-  { "tenBai": "Thi kết thúc môn học", "tietLT": 0, "tietTH": 3 }
+  { "tenBai": "Bài 1: Tổng quan", "deMuc": "1. Khái niệm cảm biến... 2. Phân loại máy ảnh...", "tietLT": 3, "tietTH": 0 },
+  { "tenBai": "Bài 2: Kỹ thuật ống kính", "deMuc": "1. Tiêu cự... 2. Khẩu độ...", "tietLT": 6, "tietTH": 17 }
 ]
 
 Nội dung HTML cần phân tích:
@@ -65,20 +77,25 @@ BẮT BUỘC trả về JSON Array, KHÔNG có wrapper, KHÔNG có markdown:
         return NextResponse.json({ error: "Không có dữ liệu file để phân tích." }, { status: 400 });
       }
 
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${actualModel}:generateContent?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts }],
-          generationConfig: {
-            responseMimeType: "application/json",
-            temperature: 0.2,
-            maxOutputTokens: 8192
-          }
-        })
-      });
+      const tryAnalyze = async (modelId) => {
+        return await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${apiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts }],
+            generationConfig: {
+              responseMimeType: "application/json",
+              temperature: 0.2,
+              maxOutputTokens: 8192
+            }
+          })
+        });
+      };
 
-      const data = await res.json();
+      console.log(`[AI-Analyze] Đang gọi ${actualModel}...`);
+      let res = await tryAnalyze(actualModel);
+      let data = await res.json();
+
       if (!res.ok) throw new Error(data.error?.message || "Lỗi AI bóc tách");
 
       const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
@@ -151,7 +168,7 @@ CHỈ TRẢ VỀ DUY NHẤT MỘT ĐỐI TƯỢNG JSON VỚI FORMAT SAU (KHÔNG 
       chatContext = `\nĐÂY LÀ ĐOẠN THẢO LUẬN TRƯỚC ĐÓ CỦA TA VỚI GIÁO VIÊN. HÃY BÁM VÀO ĐỂ SOẠN GIÁO ÁN:\n${body.chatHistory.map(msg => `${msg.role === 'user' ? 'Giáo viên' : 'Bạn (AI)'}: ${msg.content}`).join('\n')}\n`;
     }
 
-    let finalPrompt = body.promptText;
+    let finalPrompt = body.promptText || body.prompt;
     
     if (!finalPrompt && mode === 'generate') {
       const { formData, wizardData } = body;
@@ -171,65 +188,92 @@ YÊU CẦU CỐT LÕI (BẮT BUỘC TUÂN THỦ 100%):
 1. QUY TẮC PHÂN BỔ NỘI DUNG:
    - Nếu có Tiết Lý thuyết: Tập trung vào truyền đạt kiến thức, dẫn dắt, giải thích.
    - Nếu có Tiết Thực hành/Kiểm tra: Tập trung vào hoạt động rèn luyện, bài tập, chấm điểm, đánh giá.
+    - Cột Hoạt động GV: CHỈ GHI ĐỘNG TỪ HÀNH ĐỘNG KHỞI TẠO (VD: Trình chiếu, Phát vấn, Dẫn dắt, Chốt kiến thức, Chia nhóm...). Không ghi dòng diễn giải lê thê.
+    - Cột Hoạt động HS: CHỈ GHI ĐỘNG TỪ HÀNH ĐỘNG ĐÁP TRẢ (VD: Ghi chép, Thảo luận, Trả lời, Lắng nghe, Ghi nhận...).
+    - QUY TẮC DÀN TRANG: Sử dụng bảng (table) chuẩn HTML cho toàn bộ cấu trúc giáo án để đảm bảo xuất file Word không bị lệch. Sử dụng border="1" cho các bảng nội dung chính.
+    - QUY TẮC THỂ THỨC & BỐ CỤC: Bắt buộc tuân thủ 100% thể thức trình bày và bố cục của mẫu đã nạp. Không được tự ý thay đổi vị trí các thành phần.
    - Tổng quỹ thời gian của buổi này là đúng ${formData?.totalMinutes || 45} phút. Tự động tính toán để tổng thời gian các hoạt động BẮT BUỘC bằng đúng ${formData?.totalMinutes || 45} phút.
    - Chia thành các hoạt động không quá 15 phút. Tuyệt đối bám sát nội dung và thời gian này.
-2. QUY TẮC PHÂN TIẾT RÕ RÀNG: Trong cột Tên hoạt động ("segmentTitle"), phải ghi rõ hoạt động này thuộc "Tiết 1", "Tiết 2"... tương ứng với số phút đã tính.
-3. QUY TẮC NỘI DUNG: Ghi cực kỳ chi tiết kiến thức chuyên môn sẽ truyền đạt trong ô "detailedContent".
-4. QUY TẮC HÀNH ĐỘNG DỨT KHOÁT:
-   - Cột Hoạt động GV ("teacherActions"): CHỈ GHI ĐỘNG TỪ HÀNH ĐỘNG KHỞI TẠO (VD: Trình chiếu, Phát vấn, Dẫn dắt, Chốt kiến thức, Chia nhóm...). Không ghi dòng diễn giải lê thê.
-   - Cột Hoạt động HS ("studentActions"): CHỈ GHI ĐỘNG TỪ HÀNH ĐỘNG ĐÁP TRẢ (VD: Ghi chép, Thảo luận, Trả lời, Lắng nghe, Ghi nhận...).
-5. CHỈ TRẢ VỀ DUY NHẤT MỘT ĐỐI TƯỢNG JSON (JSON OBJECT) HỢP LỆ. KHÔNG DÙNG MARKDOWN BLOCK (\`\`\`json).
-6. NỘI DUNG BẮT BUỘC THEO ĐÚNG CẤU TRÚC KEYS SAU:
-{
-  "lessonInfo": {
-    "lessonNumber": "Số giáo án",
-    "chapterName": "Tên chương",
-    "lessonName": "${body.formData?.lessonName || 'Tên bài học'}",
-    "executionDate": "Ngày thực hiện"
-  },
-  "objectives": "Mục tiêu bài học (Bám sát ${body.wizardData?.competencies?.join(', ') || ''})",
-  "materials": "Đồ dùng dạy học",
-  "activities": [
-    {
-      "segmentTitle": "Buổi 1 - Tiết 1 - Tên hoạt động (1. Ổn định, 2. Khởi động...)",
-      "time": "15 phút",
-      "detailedContent": "Nội dung kiến thức hạt nhân (ghi cực kỳ chi tiết)...",
-      "teacherActions": "Trình chiếu... / Phát vấn...",
-      "studentActions": "Lắng nghe... / Thảo luận..."
+2. QUY TẮC PHÂN TIẾT RÕ RÀNG: Ghi rõ hoạt động này thuộc "Tiết 1", "Tiết 2"... tương ứng với số phút đã tính.
+3. QUY TẮC TIẾN TRÌNH DẠY HỌC (BẮT BUỘC): Khi tạo bảng tiến trình, BẮT BUỘC sử dụng chính xác cấu trúc HTML sau, chỉ thay thế nội dung bên trong:
+<table border="1" style="border-collapse: collapse; width: 100%;">
+  <tr>
+    <th rowspan="2">TT</th>
+    <th rowspan="2">NỘI DUNG</th>
+    <th colspan="2">HOẠT ĐỘNG DẠY HỌC</th>
+    <th rowspan="2">THỜI GIAN</th>
+  </tr>
+  <tr>
+    <th>HOẠT ĐỘNG CỦA GIÁO VIÊN</th>
+    <th>HOẠT ĐỘNG CỦA HỌC SINH</th>
+  </tr>
+  <tr>
+    <td>1</td>
+    <td>Dẫn nhập...</td>
+    <td>Giáo viên làm gì...</td>
+    <td>Học sinh làm gì...</td>
+    <td>5 phút</td>
+  </tr>
+</table>
+
+4. QUY TẮC NỘI DUNG: Ghi cực kỳ chi tiết kiến thức chuyên môn sẽ truyền đạt.
+5. QUY TẮC HÀNH ĐỘNG DỨT KHOÁT:
+5. NHIỆM VỤ BẮT BUỘC: Đúc kết nội dung giáo án và TRẢ VỀ DUY NHẤT MÃ HTML THUẦN TÚY. Cấu trúc HTML phải bám sát 100% vào Mẫu Template được cung cấp (nếu có). 
+
+6. LƯU Ý KỸ THUẬT: 
+   - Chỉ điền nội dung vào các ô trống phù hợp, giữ nguyên các bảng biểu, quốc hiệu, tiêu đề gốc. 
+   - TUYỆT ĐỐI KHÔNG trả về định dạng JSON. 
+    - TUYỆT ĐỐI KHÔNG bọc kết quả trong các thẻ markdown (như \`\`\`html ... \`\`\`). 
+   - CHỈ trả về mã HTML bắt đầu bằng thẻ mở và kết thúc bằng thẻ đóng.
+   - Nội dung phải chuyên nghiệp, sư phạm, trình bày đẹp bằng font chữ Times New Roman.`;
     }
-  ]
-}
-7. CHUỖI JSON ĐƯỢC ĐÓNG NGOẶC HỢP LỆ VÀ NẰM TRONG 1 OBJECT.`;
+
+    // Nếu có systemPrompt (từ frontend), hãy bám sát nó
+    if (systemPrompt && mode === 'generate') {
+      const titleContext = body.formData?.lessonName ? `BÀI HỌC: ${body.formData.lessonName}\n` : '';
+      const notesContext = body.formData?.notes ? `TÀI LIỆU THAM KHẢO: ${body.formData.notes}\n` : '';
+      
+      finalPrompt = `${titleContext}${notesContext}${systemPrompt}\n\nNHIỆM VỤ BỔ SUNG: ${finalPrompt || 'Tiến hành soạn thảo.'}\n\nLỆNH THÉP: 
+1. Đúc kết nội dung giáo án và TRẢ VỀ DUY NHẤT MÃ HTML THUẦN TÚY. 
+2. Mọi thẻ <table> cho "Nguồn tài liệu tham khảo" và "Tiến trình dạy học" PHẢI có border="1" để tạo khung kẻ bảng.
+3. Bảng ký tên cuối trang PHẢI có border="0". 
+4. CÁC TIÊU ĐỀ (Mục tiêu, Đồ dùng, Nguồn tài liệu tham khảo, Trưởng khoa, Giảng viên) PHẢI IN ĐẬM và VIẾT HOA.
+5. Cấu trúc phải bám sát 100% vào Mẫu Template về cả thể thức và bố cục.`;
     }
 
     let responseText = '';
 
-    // ── 1. GOOGLE GEMINI ───────────────────────────────────
-    if (modelType.startsWith('gemini')) {
-      const url = `https://generativelanguage.googleapis.com/v1alpha/models/${actualModel}:generateContent?key=${apiKey}`;
+    const safeModelType = modelType || '';
 
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+    // ── 1. GOOGLE GEMINI (ROBUST RETRY & FALLBACK) ──────────────────────────
+    if (safeModelType.startsWith('gemini')) {
+      const tryFetch = async (endpoint, modelId) => {
+        const url = `https://generativelanguage.googleapis.com/${endpoint}/models/${modelId}:generateContent?key=${apiKey.trim()}`;
+        const payload = {
           contents: [{ role: "user", parts: [{ text: finalPrompt }] }],
-          generationConfig: {
-            responseMimeType: "application/json",
-            temperature: 0.7,
-            maxOutputTokens: 8192
-          }
-        })
-      });
+          generationConfig: { temperature: 0.7, maxOutputTokens: 8192 }
+        };
+        return await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      };
 
-      const data = await res.json();
+      // Thử model chính
+      console.log(`[AI] Đang gọi Gemini (${actualModel})...`);
+      let res = await tryFetch('v1beta', actualModel);
+      let data = await res.json();
 
       if (!res.ok) {
-        console.error("Google API Error Response:", data);
-        return NextResponse.json({ error: data.error?.message || `Lỗi xác thực từ Google API HTTP ${res.status}.` }, { status: res.status });
+        console.error("LỖI GOOGLE API:", data);
+        return NextResponse.json({ 
+          success: false, 
+          error: data.error?.message || `Google API trả về lỗi ${res.status}` 
+        }, { status: res.status });
       }
 
       responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-
       if (!responseText) {
         console.error("Dữ liệu trả về bị rỗng:", JSON.stringify(data));
         return NextResponse.json({ error: "Google không trả về kết quả. Có thể nội dung đã bị block an toàn." }, { status: 500 });
@@ -237,7 +281,7 @@ YÊU CẦU CỐT LÕI (BẮT BUỘC TUÂN THỦ 100%):
     }
 
     // ── 2. OPENAI ───────────────────────────────────────────────────
-    else if (modelType.startsWith('openai') || modelType.startsWith('gpt')) {
+    else if (safeModelType.startsWith('openai') || safeModelType.startsWith('gpt')) {
       const res = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -267,7 +311,7 @@ YÊU CẦU CỐT LÕI (BẮT BUỘC TUÂN THỦ 100%):
     }
 
     // ── 3. ANTHROPIC CLAUDE ─────────────────────────────────────────
-    else if (modelType.startsWith('anthropic') || modelType.startsWith('claude')) {
+    else if (safeModelType.startsWith('anthropic') || safeModelType.startsWith('claude')) {
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
@@ -296,31 +340,42 @@ YÊU CẦU CỐT LÕI (BẮT BUỘC TUÂN THỦ 100%):
       }
     }
 
-    // ── NẾU LÀ MODE SIMULATE HOẶC GENERATE, PARSE THỬ TRƯỚC KHI TRẢ VỀ ĐỂ ĐẢM BẢO CHUẨN JSON ──
+    // ── HẬU XỬ LÝ: TỰ ĐỘNG BÓC TÁCH NẾU AI TRẢ VỀ JSON HOẶC MARKDOWN NHẦM ──
     try {
-      let cleanJson = responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
-      const st = cleanJson.indexOf('{');
-      const en = cleanJson.lastIndexOf('}');
-      if (st !== -1 && en !== -1) cleanJson = cleanJson.substring(st, en + 1);
+      let cleanText = responseText.replace(/```(json|html|markdown)?/gi, '').replace(/```/g, '').trim();
       
-      const parsedObj = JSON.parse(cleanJson);
-      
-      if (mode === 'simulate') {
-        if (parsedObj.dialogue) return NextResponse.json({ dialogue: parsedObj.dialogue }, { status: 200 });
-        if (parsedObj.html) return NextResponse.json({ html: parsedObj.html }, { status: 200 });
-        return NextResponse.json({ dialogue: [] }, { status: 200 });
+      if (cleanText.startsWith('{') && cleanText.indexOf('}') !== -1) {
+        // Trích xuất phần JSON thực sự (phòng trường hợp có text rác xung quanh)
+        const st = cleanText.indexOf('{');
+        const en = cleanText.lastIndexOf('}');
+        const jsonOnly = cleanText.substring(st, en + 1);
+        
+        try {
+          const parsed = JSON.parse(jsonOnly);
+          
+          if (mode === 'simulate') {
+            if (parsed.dialogue) return NextResponse.json({ dialogue: parsed.dialogue }, { status: 200 });
+            if (parsed.html) return NextResponse.json({ html: parsed.html }, { status: 200 });
+          } else if (mode === 'generate') {
+            // Unwrapping cho giáo án
+            responseText = parsed.html || parsed.giao_an_html || parsed.content || parsed.text || responseText;
+          }
+        } catch (parseError) {
+          // Nếu không parse được JSON, dùng cleanText đã gọt markdown
+          responseText = cleanText;
+        }
+      } else {
+        // Không phải JSON, nhưng có thể đã gọt được markdown
+        responseText = cleanText;
       }
     } catch (e) {
-      console.error("Parse check failed on backend, continuing to send raw text", e);
+      console.error("Lỗi hậu xử lý AI response:", e);
     }
 
-    return NextResponse.json({ result: responseText }, { status: 200 });
+    return NextResponse.json({ text: responseText }, { status: 200 });
 
   } catch (error) {
-    console.error("Lỗi 500 tại Server:", error);
-    return NextResponse.json({ 
-      error: "Lỗi AI/Parse", 
-      details: error.message 
-    }, { status: 500 });
+    console.error("LỖI API (generate):", error);
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

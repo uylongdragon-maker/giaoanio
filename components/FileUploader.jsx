@@ -53,11 +53,18 @@ export default function FileUploader({ onFileSummarized, apiKey, modelType }) {
         })
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Lỗi đọc file');
+      let data = {};
+      try {
+        data = await res.json();
+      } catch (e) {
+        console.error("[FileUploader] Lỗi parse JSON từ Backend:", e);
+      }
+
+      if (!res.ok) throw new Error(data.details || data.error || `Lỗi hệ thống (HTTP ${res.status})`);
       
-      setSummary(data.summary);
-      if (onFileSummarized) onFileSummarized(data.summary);
+      const resultText = data.text || data.summary;
+      setSummary(resultText);
+      if (onFileSummarized) onFileSummarized(resultText);
 
     } catch (err) {
       console.error(err);

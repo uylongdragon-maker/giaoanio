@@ -3,7 +3,7 @@
 import { useState, useRef } from 'react';
 import { UploadCloud, File, Loader2, CheckCircle2, Settings } from 'lucide-react';
 
-export default function CourseUploader({ onCourseAnalyzed, apiKey, modelType, onOpenSettings }) {
+export default function CourseUploader({ onCourseAnalyzed, apiKey, modelId, onOpenSettings }) {
   const [file, setFile] = useState(null);
   const [isReading, setIsReading] = useState(false);
   const [toast, setToast] = useState(null);
@@ -71,7 +71,7 @@ export default function CourseUploader({ onCourseAnalyzed, apiKey, modelType, on
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           apiKey,
-          modelType,
+          modelId,
           mode: 'analyze_syllabus',
           fileData: {
             mimeType,
@@ -81,12 +81,19 @@ export default function CourseUploader({ onCourseAnalyzed, apiKey, modelType, on
         })
       });
 
-      const data = await res.json();
-      console.log("[CourseUploader] AI trả về data:", data); // Debug: kiểm tra số lượng bài học
+      let data = {};
+      try {
+        data = await res.json();
+      } catch (e) {
+        console.error("[CourseUploader] Lỗi parse JSON từ Backend:", e);
+      }
+
+      console.log("[CourseUploader] AI trả về data:", data);
 
       if (!res.ok) {
         console.error("[CourseUploader] Lỗi từ Backend:", data);
-        throw new Error(data.error || 'Lỗi bóc tách từ AI');
+        const errMsg = data.details || data.error || `Lỗi bóc tách từ AI (HTTP ${res.status})`;
+        throw new Error(errMsg);
       }
       
       if (!data.lessons || data.lessons.length === 0) {

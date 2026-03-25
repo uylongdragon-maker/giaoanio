@@ -4,14 +4,19 @@ import { useState } from 'react';
 import { Settings, Eye, EyeOff, CheckCircle, ChevronDown, KeyRound, Sparkles, Wand2 } from 'lucide-react';
 
 const MODELS = [
-  { id: 'gemini-3-flash-preview', modelId: 'gemini-3-flash-preview', label: 'Google Gemini 3.0 Flash (⚡ Cực nhanh)', icon: '⚡', provider: 'gemini' },
-  { id: 'gemini-3.1-pro-preview',  modelId: 'gemini-3.1-pro-preview',  label: 'Google Gemini 3.1 Pro (🧠 Thông minh nhất)',   icon: '🤖', provider: 'gemini' },
+  { id: 'gemini-3.1-pro-preview',   modelId: 'gemini-3.1-pro-preview',   label: 'Google Gemini 3.1 Pro (🧠 Thông minh nhất)',   icon: '🤖', provider: 'gemini' },
+  { id: 'gemini-3.0-flash-preview', modelId: 'gemini-3-flash-preview', label: 'Google Gemini 3.0 Flash (⚡ Cực nhanh)',      icon: '⚡', provider: 'gemini' },
+  { id: 'gemini-2.5-pro',           modelId: 'gemini-2.5-pro',           label: 'Google Gemini 2.5 Pro (🚀 Thế hệ mới)',     icon: '🚀', provider: 'gemini' },
+  { id: 'gemini-2.5-flash',         modelId: 'gemini-2.5-flash',         label: 'Google Gemini 2.5 Flash (🔥 Hiệu năng)',    icon: '🔥', provider: 'gemini' },
+  { id: 'gemini-2.0-flash',         modelId: 'gemini-2.0-flash',         label: 'Google Gemini 2.0 Flash (✨ Cân bằng)',     icon: '✨', provider: 'gemini' },
+  { id: 'deep-research-pro-preview-12-2025', modelId: 'deep-research-pro-preview-12-2025', label: 'Google Deep Research (🔍 Chuyên sâu)', icon: '🔍', provider: 'gemini' },
+  { id: 'gemma-3-27b-it',           modelId: 'gemma-3-27b-it',           label: 'Google Gemma 3 27B (🌐 Cởi mở)',           icon: '🌐', provider: 'gemini' },
   { id: 'openai-gpt4o-mini',       modelId: 'gpt-4o-mini',            label: 'OpenAI GPT-4o Mini',                   icon: '✨', provider: 'openai' },
   { id: 'anthropic-sonnet',        modelId: 'claude-3-5-sonnet-20240620', label: 'Claude 3.5 Sonnet',               icon: '📘', provider: 'anthropic' },
 ];
 
 export default function AILandingConfig({ onComplete }) {
-  const [modelType, setModelType] = useState('gemini-3-flash-preview');
+  const [modelType, setModelType] = useState('gemini-1.5-flash-latest');
   const [apiKey, setApiKey] = useState('');
   const [showKey, setShowKey] = useState(false);
   const [isModelOpen, setIsModelOpen] = useState(false);
