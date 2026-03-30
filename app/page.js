@@ -65,6 +65,30 @@ export default function Home() {
     }
   };
 
+  const handleResetLesson = async (sessionId) => {
+    if (!user || !activeCourse) return;
+    if (!confirm("Bạn có chắc chắn muốn HỦY giáo án này và soạn lại từ đầu? Mọi dữ liệu đã đúc sẽ bị xóa.")) return;
+
+    try {
+      const updatedSchedule = activeCourse.schedule.map(sess => {
+        if (sess.id === sessionId) {
+          const { generatedLesson, wizardData, ...rest } = sess;
+          return { ...rest, status: 'pending' };
+        }
+        return sess;
+      });
+
+      const courseRef = doc(db, 'users', user.uid, 'courses', activeCourse.id);
+      await updateDoc(courseRef, { schedule: updatedSchedule });
+      
+      setActiveCourse(prev => ({ ...prev, schedule: updatedSchedule }));
+      setPreviewSession(null); 
+      showToast("Đã hủy giáo án. Bạn có thể soạn lại ngay.");
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
   const handleWizardComplete = async (courseId) => {
     if (user) await refreshUserData(user.uid);
   };
@@ -196,7 +220,7 @@ export default function Home() {
                 aiConfig={aiConfig}
                 sessionData={{
                   id: selectedSession.id,
-                  title: selectedSession.contents.map(c => c.subItem || c.lessonName).join(', '),
+                  title: Array.from(new Set(selectedSession.contents.map(c => c.subItem || c.lessonName))).join(', '),
                   periods: selectedSession.totalPeriods,
                   totalMinutes: Math.round(selectedSession.totalPeriods * 45),
                   topics: selectedSession.contents.map(c => c.subItem).filter(Boolean)
@@ -231,6 +255,7 @@ export default function Home() {
         isOpen={!!previewSession}
         onClose={() => setPreviewSession(null)}
         session={previewSession}
+        onReset={handleResetLesson}
       />
 
       {/* MAIN CONTENT LAYER */}
@@ -312,7 +337,7 @@ export default function Home() {
                     <div>
                       <p className="text-[11px] font-black text-slate-500 mb-2 uppercase tracking-tight">{formatDate(upNextSession.date)}</p>
                       <h3 className="font-black text-white text-xl leading-snug line-clamp-3 mb-8 group-hover:text-indigo-200 transition-colors">
-                        {upNextSession.contents.map(c => c.subItem || c.lessonName).join(' • ')}
+                        {Array.from(new Set(upNextSession.contents.map(c => c.subItem || c.lessonName))).join(' • ')}
                       </h3>
                     </div>
                     <button 
@@ -448,7 +473,7 @@ export default function Home() {
                         </div>
 
                         <h4 className={`text-base font-black leading-tight line-clamp-2 mb-4 group-hover/card:text-white transition-colors ${config.text}`}>
-                          {session.contents.map(c => c.lessonName).join(' & ')}
+                          {Array.from(new Set(session.contents.map(c => c.lessonName))).join(' & ')}
                         </h4>
 
                         <div className="space-y-3">

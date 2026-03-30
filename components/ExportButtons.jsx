@@ -245,7 +245,7 @@ export default function ExportButtons({ activities, lessonData, generatedLesson,
       {/* PDF – M3 tonal pill button */}
       <button
         onClick={handleExportPDF}
-        disabled={exportingPdf}
+        disabled={exportingPdf || !isTimeValid}
         className="flex-1 flex items-center justify-center gap-2 bg-rose-600 hover:bg-rose-700 disabled:bg-slate-200 disabled:text-slate-400 text-white font-semibold py-4 rounded-full shadow-md shadow-rose-200 hover:shadow-lg hover:-translate-y-0.5 disabled:shadow-none disabled:transform-none transition-all text-sm"
       >
         {exportingPdf ? <Loader2 className="w-5 h-5 animate-spin" /> : <FileDown className="w-5 h-5" />}

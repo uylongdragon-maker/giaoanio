@@ -83,10 +83,33 @@ export default function CourseWizard({ onComplete }) {
     setStep(4);
   };
 
-  const handleScheduleComplete = (startDate, dayConfigs, holidayList) => {
-    const sessions = generateTimetable(syllabus, startDate, dayConfigs, holidayList);
-    setFinalSchedule({ sessions, config: { startDate, dayConfigs, holidayList } });
-    setStep(6);
+  const handleScheduleComplete = async (startDate, dayConfigs, holidayList) => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch('/api/schedule-ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          syllabus,
+          startDate,
+          dayConfigs,
+          holidayList,
+          apiKey,
+          modelId: MODELS.find(m => m.id === modelType)?.modelId || modelType
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Không thể xếp lịch bằng AI.");
+
+      setFinalSchedule({ sessions: data.sessions, config: { startDate, dayConfigs, holidayList } });
+      setStep(6);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const finalizeCourse = async () => {

@@ -5,10 +5,66 @@ import { X, FileText, Download, CheckCircle2, Calendar, Clock, BookOpen, Bot } f
 // so we'll likely just show the summary and a close button for now, 
 // or implement a simple version of the download if needed.
 
-export default function SessionPreviewModal({ isOpen, onClose, session }) {
+export default function SessionPreviewModal({ isOpen, onClose, session, onReset }) {
   if (!isOpen || !session) return null;
 
   const lesson = session.generatedLesson;
+  
+  // 1. Đồng bộ dữ liệu (Data Binding)
+  // Lấy mục tiêu từ trường objectives/muc_tieu hoặc dùng fallback
+  const lessonObjective = lesson?.objectives || lesson?.muc_tieu || "Hiểu và thực hiện được các nội dung trọng tâm của bài học.";
+  
+  // Mapping mảng hoạt động sang định dạng bảng Phụ lục 10
+  const lessonRows = (lesson?.activities || []).map((act, i) => ({
+    tt: i + 1,
+    noi_dung: act.segmentTitle || act.noi_dung || "",
+    phut: parseInt(act.time || act.phut) || 0
+  }));
+
+  // Hàm xuất bản Word từ dữ liệu JSON hoặc HTML hiện có
+  const handleExportWord = () => {
+    try {
+      let content = "";
+      
+      // Nếu lesson là HTML string (từ InteractiveLessonBuilder)
+      if (typeof lesson === 'string') {
+        content = lesson;
+      } else if (lesson?.activities) {
+        // Nếu lesson là JSON (từ LessonWizard), ta tạo một bảng đơn giản hoặc dùng cấu trúc preview
+        // Ở đây ta ưu tiên lấy từ DOM nếu đang hiển thị, hoặc dựng lại HTML cơ bản
+        content = document.getElementById('preview-modal-content')?.innerHTML || "";
+      }
+
+      if (!content) {
+        alert("Không tìm thấy nội dung giáo án để xuất Word.");
+        return;
+      }
+
+      const header = `<html xmlns:o='urn:schemas-microsoft-com:office:office' 
+                            xmlns:w='urn:schemas-microsoft-com:office:word' 
+                            xmlns='http://www.w3.org/TR/REC-html40'>
+                      <head><meta charset='utf-8'><title>Giáo Án</title>
+                      <style>
+                        table { border-collapse: collapse; width: 100%; }
+                        td, th { border: 1px solid black; padding: 8px; font-family: "Times New Roman"; }
+                      </style>
+                      </head><body>`;
+      const footer = "</body></html>";
+      const sourceHTML = header + content + footer;
+
+      const blob = new Blob(['\ufeff', sourceHTML], { type: 'application/msword' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `GiaoAn_${Array.from(new Set(session.contents.map(c => c.lessonName))).join('_')}.doc`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert("Lỗi khi xuất Word: " + err.message);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/60 backdrop-blur-xl p-4 md:p-8">
@@ -24,7 +80,7 @@ export default function SessionPreviewModal({ isOpen, onClose, session }) {
               </div>
             </div>
             <h2 className="text-3xl font-black text-white tracking-tight leading-none mb-4">
-              {session.contents.map(c => c.lessonName).join(' & ')}
+              {Array.from(new Set(session.contents.map(c => c.lessonName))).join(' & ')}
             </h2>
             <div className="flex flex-wrap gap-4 text-slate-400 text-sm font-medium">
               <div className="flex items-center gap-2">
@@ -46,7 +102,7 @@ export default function SessionPreviewModal({ isOpen, onClose, session }) {
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto p-8 custom-scrollbar" id="preview-modal-content">
           {lesson ? (
             <div className="space-y-8">
               <section>
@@ -54,8 +110,8 @@ export default function SessionPreviewModal({ isOpen, onClose, session }) {
                   <BookOpen className="w-5 h-5 text-indigo-400" />
                   <h3 className="text-lg font-bold text-white uppercase tracking-tighter">Mục tiêu bài học</h3>
                 </div>
-                <div className="bg-white/5 rounded-3xl p-6 border border-white/5 text-slate-300 text-sm leading-relaxed">
-                  {lesson.objectives || "Không có dữ liệu mục tiêu."}
+                <div className="bg-white/5 rounded-3xl p-6 border border-white/5 text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">
+                  {lessonObjective}
                 </div>
               </section>
 
@@ -64,21 +120,22 @@ export default function SessionPreviewModal({ isOpen, onClose, session }) {
                   <FileText className="w-5 h-5 text-indigo-400" />
                   <h3 className="text-lg font-bold text-white uppercase tracking-tighter">Cấu trúc hoạt động</h3>
                 </div>
-                <div className="space-y-4">
-                  {lesson.activities?.map((act, i) => (
-                    <div key={i} className="bg-white/5 rounded-2xl p-5 border border-white/5 flex items-start gap-4">
-                      <div className="w-10 h-10 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-black flex-shrink-0 border border-indigo-500/20">
-                        {i + 1}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">{act.time}</span>
-                          <h4 className="font-bold text-white text-sm">{act.segmentTitle}</h4>
+                <div className="bg-white/5 rounded-3xl p-6 border border-white/5">
+                  <ul className="divide-y divide-white/5">
+                    {lessonRows.map((row, index) => (
+                      <li key={index} className="flex justify-between items-center py-4 first:pt-0 last:pb-0">
+                        <div className="flex items-center gap-4">
+                          <span className="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-xs font-black border border-indigo-500/20">
+                            {row.tt}
+                          </span>
+                          <span className="text-white font-bold text-sm tracking-tight">{row.noi_dung}</span>
                         </div>
-                        <p className="text-xs text-slate-400 line-clamp-2">{act.detailedContent}</p>
-                      </div>
-                    </div>
-                  ))}
+                        <span className="px-3 py-1 bg-white/5 rounded-full text-[10px] font-black text-slate-500 uppercase tracking-widest border border-white/5">
+                          {row.phut} phút
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               </section>
             </div>
@@ -91,23 +148,27 @@ export default function SessionPreviewModal({ isOpen, onClose, session }) {
         </div>
 
         {/* Footer */}
-        <div className="p-8 border-t border-white/5 bg-white/5 flex justify-end gap-4">
+        <div className="p-8 border-t border-white/5 bg-white/5 flex justify-end gap-4 overflow-x-auto">
+          <button 
+            onClick={() => onReset && onReset(session.id)}
+            className="px-6 py-4 bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 font-bold rounded-2xl border border-rose-500/30 flex items-center gap-2 transition-all active:scale-95 shrink-0"
+          >
+            <X className="w-5 h-5" /> HỦY & SOẠN LẠI
+          </button>
+          
           <button 
             onClick={onClose}
             className="px-8 py-4 rounded-2xl text-slate-400 font-bold hover:text-white transition-colors"
           >
             Đóng
           </button>
+          
           <button 
-            onClick={() => {
-              // Note: The actual Word export logic would go here
-              // For now we notify that this would trigger the export
-              alert("Tính năng tải lại file Word đang được xử lý...");
-            }}
-            className="px-8 py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-2xl shadow-lg shadow-emerald-500/20 flex items-center gap-3 transition-all active:scale-95"
+            onClick={handleExportWord}
+            className="px-8 py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-2xl shadow-lg shadow-emerald-500/20 flex items-center gap-3 transition-all active:scale-95 shrink-0"
           >
             <Download className="w-5 h-5" />
-            TẢI LẠI FILE WORD
+            TẢI LẠI
           </button>
         </div>
       </div>

@@ -64,19 +64,37 @@ export default function InteractiveLessonBuilder({ sessionData, courseData, onCo
 
       if (!htmlContent) throw new Error("Không thể bóc tách nội dung từ file Word.");
 
-      setLessonTemplate(htmlContent);
+      showToast("Đang bóc tách khung sườn (Skeleton) bằng AI...", "info");
+      
+      // NEW: Call AI to extract skeleton
+      const skeletonRes = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'extract_skeleton',
+          apiKey: aiConfig?.apiKey,
+          modelType: aiConfig?.modelType || aiConfig?.model,
+          fileData: { rawText: htmlContent }
+        })
+      });
+      
+      const skeletonData = await skeletonRes.json();
+      if (!skeletonRes.ok) throw new Error(skeletonData.error || "Lỗi bóc tách khung sườn.");
+
+      const skeletonHtml = skeletonData.text;
+      setLessonTemplate(skeletonHtml);
       
       // Save to cloud
       if (auth.currentUser) {
         await setDoc(doc(db, 'users', auth.currentUser.uid, 'settings', 'template'), {
-          html: htmlContent,
+          html: skeletonHtml,
           updatedAt: new Date().toISOString()
         });
       }
 
-      showToast("Đã nạp mẫu giáo án thành công!");
+      showToast("Đã nạp khung sườn giáo án thành công!");
       setStep(2);
-      startAIChat(htmlContent);
+      startAIChat(skeletonHtml);
     } catch (err) {
       showToast(err.message, 'error');
     } finally {
@@ -172,17 +190,20 @@ Hãy chào thầy cô và xác nhận bạn nắm rõ các đề mục trên. Sa
     setLoading(true);
     try {
       const systemMsg = `Dựa vào các ý tưởng đã thống nhất trong chat, hãy đúc kết thành giáo án hoàn chỉnh. 
-BẮT BUỘC định dạng đầu ra bằng mã HTML khớp 100% với cấu trúc của Mẫu sau: 
+SỬ DỤNG KHUNG SƯỜN (SKELETON) SAU:
 ${lessonTemplate}
 
-Chỉ điền nội dung vào các ô trống phù hợp, giữ nguyên các bảng biểu, quốc hiệu, tiêu đề gốc. 
-Nội dung phải chuyên nghiệp, sư phạm, trình bày đẹp bằng font chữ Times New Roman.`;
+NHIỆM VỤ:
+1. Giữ nguyên 100% cấu trúc bảng biểu, quốc hiệu và tiêu đề của khung sườn.
+2. Sáng tạo nội dung sư phạm chuyên nghiệp để điền vào các ô trống trong bảng.
+3. Nội dung phải bám sát đề mục: ${sessionData.topics || 'Không có'}.
+4. Trả về mã HTML hoàn chỉnh khớp với khung sườn.`;
 
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          prompt: "Tiến hành soạn thảo giáo án hoàn chỉnh theo mẫu đã nạp.",
+          prompt: "Tiến hành soạn thảo nội dung bài giảng chi tiết dựa trên khung sườn và ý tưởng đã thống nhất.",
           history: chatHistory,
           apiKey: aiConfig?.apiKey,
           modelType: aiConfig?.modelType || aiConfig?.model,
@@ -212,99 +233,35 @@ Nội dung phải chuyên nghiệp, sư phạm, trình bày đẹp bằng font c
   };
 
   // --- EXPORT LOGIC ---
-  const exportWord = async () => {
-    setLoading(true);
+  const exportWord = () => {
     try {
-      const sanitizeHTMLForDocx = (el) => {
-        // Create an offline DOM to manipulate
-        const doc = document.implementation.createHTMLDocument('export');
-        const container = doc.createElement('div');
-        container.innerHTML = el.innerHTML;
-        
-        // Use a recursive function to clean all nodes
-        const cleanNode = (node) => {
-          if (node.nodeType === 3) return node.cloneNode(true); // Text node
-          if (node.nodeType !== 1) return null; // Only handle elements
-          
-          const tagName = node.tagName.toLowerCase();
-          // Blacklist non-standard tags
-          const blacklistedTags = ['script', 'style', 'svg', 'path', 'button', 'noscript', 'canvas', 'iframe'];
-          if (blacklistedTags.includes(tagName)) return null;
+      // 1. Lấy nội dung HTML từ khung Preview (ví dụ lấy qua ID hoặc State)
+      const content = previewRef.current?.innerHTML || previewContent;
 
-          const newNode = doc.createElement(tagName);
-          
-          // Whitelist attributes
-          const allowedAttrs = ['style', 'border', 'width', 'height', 'align', 'colspan', 'rowspan', 'valign'];
-          for (let i = 0; i < node.attributes.length; i++) {
-            const attr = node.attributes[i];
-            const attrName = attr.name.toLowerCase();
-            
-            // CRITICAL: Strip any attribute starting with @ or data- or having illegal XML characters
-            if (attrName.startsWith('@') || attrName.startsWith('data-') || !/^[a-z][a-z0-9-]*$/.test(attrName)) {
-              continue; 
-            }
-            
-            if (allowedAttrs.includes(attrName)) {
-              if (attrName === 'style') {
-                // Deep clean style: ONLY keep safe properties
-                const styleObj = attr.value.split(';').reduce((acc, rule) => {
-                  const [prop, val] = rule.split(':').map(s => s?.trim());
-                  if (prop && val && !prop.startsWith('--') && !prop.includes('@')) {
-                    acc.push(`${prop}: ${val}`);
-                  }
-                  return acc;
-                }, []);
-                if (styleObj.length > 0) newNode.setAttribute('style', styleObj.join('; '));
-              } else {
-                newNode.setAttribute(attrName, attr.value);
-              }
-            }
-          }
-          
-          // Recursively add children
-          Array.from(node.childNodes).forEach(child => {
-            const cleanedChild = cleanNode(child);
-            if (cleanedChild) newNode.appendChild(cleanedChild);
-          });
-          
-          return newNode;
-        };
+      // 2. Bọc HTML vào bộ khung XML chuẩn của Microsoft Word
+      const header = `<html xmlns:o='urn:schemas-microsoft-com:office:office' 
+                            xmlns:w='urn:schemas-microsoft-com:office:word' 
+                            xmlns='http://www.w3.org/TR/REC-html40'>
+                      <head><meta charset='utf-8'><title>Giáo Án</title></head><body>`;
+      const footer = "</body></html>";
+      const sourceHTML = header + content + footer;
 
-        const finalContainer = doc.createElement('div');
-        Array.from(container.childNodes).forEach(child => {
-          const cleaned = cleanNode(child);
-          if (cleaned) finalContainer.appendChild(cleaned);
-        });
-        
-        return finalContainer.innerHTML;
-      };
+      // 3. Tạo Blob với BOM (\ufeff) để không bị lỗi font tiếng Việt
+      const blob = new Blob(['\ufeff', sourceHTML], { type: 'application/msword' });
 
-      const res = await fetch('/api/export-docx', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          html: sanitizeHTMLForDocx(previewRef.current),
-          title: sessionData.title
-        })
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.details || errorData.error || "Lỗi khi kết nối với server xuất file.");
-      }
-
-      const blob = await res.blob();
+      // 4. Tạo link tải xuống (Ép đuôi .doc để MS Word tự động convert)
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `GiaoAn_${sessionData.title.replace(/\s+/g, '_')}.docx`;
+      const fileName = `GiaoAn_${sessionData.title.replace(/\s+/g, '_')}.doc`;
+      link.download = fileName;
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
       URL.revokeObjectURL(url);
       showToast("Đã tải xuống file Word thành công!");
     } catch (err) {
-      showToast(err.message, 'error');
-    } finally {
-      setLoading(false);
+      showToast("Lỗi khi xuất file Word: " + err.message, 'error');
     }
   };
 

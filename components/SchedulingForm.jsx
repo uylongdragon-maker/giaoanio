@@ -25,7 +25,7 @@ export default function SchedulingForm({ lessons, onScheduleComplete }) {
       if (newConfigs[dayValue] !== undefined) {
         delete newConfigs[dayValue];
       } else {
-        newConfigs[dayValue] = 3; // Default to 3 periods if none set
+        newConfigs[dayValue] = 4; // Default to 4 periods (180 minutes)
       }
       return newConfigs;
     });
@@ -53,7 +53,7 @@ export default function SchedulingForm({ lessons, onScheduleComplete }) {
   const totalPeriods = lessons.reduce((sum, l) => {
     const glt = parseFloat(l.gioLT || 0);
     const gth = parseFloat(l.gioTH || 0);
-    return sum + glt + (gth * (60 / 45)); // Quy đổi 60/45 cho TH/KT
+    return sum + glt + (gth * (60 / 45)); // Quy đổi 60/45 cho TH/KT (1h TH = 1.33 tiết)
   }, 0);
   
   const calculateProjectedEnd = () => {
@@ -102,7 +102,7 @@ export default function SchedulingForm({ lessons, onScheduleComplete }) {
         </div>
         <div>
           <h2 className="text-xl font-black text-slate-800">Cấu hình Lịch giảng dạy Pro</h2>
-          <p className="text-sm text-slate-500">Môn học có <strong>{Math.round(totalPeriods)} tiết quy đổi</strong> cần phân bổ.</p>
+          <p className="text-sm text-slate-500 italic">Mặc định 1 buổi dạy = <strong>180 phút (4 tiết)</strong>. Hệ thống sẽ tự san sẻ nội dung cho đều.</p>
         </div>
       </div>
 

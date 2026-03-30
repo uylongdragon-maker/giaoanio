@@ -149,8 +149,11 @@ export default function LessonWizard({ aiConfig, setAiConfig, sessionData, cours
           });
         }
 
-        setGeneratedLesson(parsedLesson);
-        setActivities(parsedLesson.activities); 
+        // Auto-Normalization (Strict Time Matching)
+        const normalizedActivities = normalizeTime(parsedLesson.activities, lessonData.totalMinutes);
+
+        setGeneratedLesson({ ...parsedLesson, activities: normalizedActivities });
+        setActivities(normalizedActivities); 
         
         setTimeout(() => resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
         showToast(`✅ Đã đúc thành công giáo án chuẩn Phụ lục 10!`, 'success');
@@ -165,6 +168,46 @@ export default function LessonWizard({ aiConfig, setAiConfig, sessionData, cours
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  // --- STRICT TIME MATCHING ALGORITHM ---
+  const normalizeTime = (rows, targetTotal = 180) => {
+    if (!rows || rows.length === 0) return rows;
+    
+    // 1. Tính tổng số phút AI thực tế đã sinh ra
+    let currentTotal = rows.reduce((sum, row) => sum + (parseInt(row.time) || 0), 0);
+    if (currentTotal === 0 || currentTotal === targetTotal) return rows;
+
+    console.log(`[StrictScaling] Scaling từ ${currentTotal}m về ${targetTotal}m (Ratio: ${targetTotal/currentTotal})`);
+
+    // 2. Tính tỷ lệ nén (VD: 180 / 360 = 0.5)
+    const ratio = targetTotal / currentTotal;
+
+    // 3. Nhân tất cả các ô thời gian với tỷ lệ này và làm tròn
+    let newRows = rows.map(row => {
+      const scaled = Math.round((parseInt(row.time) || 0) * ratio);
+      return { 
+        ...row, 
+        time: `${Math.max(1, scaled)} phút` // Đảm bảo ít nhất 1 phút
+      };
+    });
+
+    // 4. Xử lý sai số do làm tròn (Bù trừ vào bước tốn nhiều thời gian nhất)
+    let newTotal = newRows.reduce((sum, row) => sum + (parseInt(row.time) || 0), 0);
+    let diff = targetTotal - newTotal;
+
+    if (diff !== 0) {
+      // Tìm index của bước có thời gian dài nhất
+      let maxIndex = 0;
+      for (let i = 1; i < newRows.length; i++) {
+        if ((parseInt(newRows[i].time) || 0) > (parseInt(newRows[maxIndex].time) || 0)) maxIndex = i;
+      }
+      // Cộng/trừ phần dư vào bước đó để tổng chính xác 100%
+      const oldTime = parseInt(newRows[maxIndex].time) || 0;
+      newRows[maxIndex].time = `${Math.max(1, oldTime + diff)} phút`; 
+    }
+
+    return newRows;
   };
 
   const handleExportFinished = () => {
@@ -184,7 +227,7 @@ export default function LessonWizard({ aiConfig, setAiConfig, sessionData, cours
 
   const totalRequiredMinutes = lessonData?.totalMinutes || 0;
   const allocatedMinutes = activities.reduce((sum, act) => sum + (parseInt(act.time) || 0), 0);
-  const isTimeValid = allocatedMinutes >= totalRequiredMinutes;
+  const isTimeValid = totalRequiredMinutes > 0 && allocatedMinutes === totalRequiredMinutes;
   const progressPercent = totalRequiredMinutes > 0 ? Math.min(100, (allocatedMinutes / totalRequiredMinutes) * 100) : 0;
 
   return (
@@ -371,10 +414,16 @@ export default function LessonWizard({ aiConfig, setAiConfig, sessionData, cours
                   />
                 </div>
                 {!isTimeValid && (
-                  <p className="text-xs text-rose-500 mt-3 font-medium">⚠️ Cảnh báo: AI phân bổ thiếu thời gian.</p>
+                  <p className="text-xs text-rose-500 mt-3 font-medium flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+                    SAI LỆCH THỜI GIAN: Tổng cộng đang là {allocatedMinutes} phút (Thiếu/Dư so với {totalRequiredMinutes} phút).
+                  </p>
                 )}
-                {isTimeValid && allocatedMinutes > totalRequiredMinutes && (
-                  <p className="text-xs text-amber-500 mt-3 font-medium">⚠️ Cảnh báo: AI phân bổ hơi lố thời gian.</p>
+                {isTimeValid && (
+                  <p className="text-xs text-emerald-600 mt-3 font-bold flex items-center gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    ĐÃ ĐỦ THỜI GIAN: Khớp chính xác {totalRequiredMinutes} phút.
+                  </p>
                 )}
               </div>
 

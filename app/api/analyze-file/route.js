@@ -14,34 +14,43 @@ export async function POST(req) {
     let parts;
 
     if (fileData.rawText) {
-      const prompt = `Bạn là chuyên gia bóc tách đề cương. Hãy phân tích bảng HTML và trích xuất TOÀN BỘ dữ liệu thành mảng JSON. 
-YÊU CẦU:
-1. tenBai: Tên chương/bài lớn.
-2. deMuc: Gộp tất cả các dòng mục lục con/chi tiết nằm bên dưới bài đó thành một chuỗi, cách nhau bằng dấu phẩy. VD: '1. Khái niệm, 2. Phân loại'. Nếu không có thì để trống.
-3. gioLT: Số Giờ Lý thuyết nguyên bản.
-4. gioTH: Tổng số Giờ Thực hành + Kiểm tra + Thi.
-TUYỆT ĐỐI KHÔNG QUY ĐỔI. Lấy đúng con số hiển thị trong bảng.
+      const prompt = `Bạn là "Server AI Client" chuyên gia bóc tách cấu trúc đề cương đào tạo. Hãy phân tích nội dung HTML/Text này và trích xuất dữ liệu bài học một cách chính xác tuyệt đối.
 
-BẮT BUỘC TRẢ VỀ ĐÚNG ĐỊNH DẠNG JSON ARRAY SAU:
+YÊU CẦU TRÍCH XUẤT:
+1. tenBai: Tên bài học, chương hoặc học phần lớn.
+2. deMuc: Danh sách các đề mục nhỏ, tiểu mục hoặc nội dung chi tiết bên trong bài đó. Gộp thành chuỗi, cách nhau bằng dấu phẩy. VD: "1. Khái niệm, 2. Quy trình".
+3. gioLT: Số GIỜ Lý thuyết nguyên bản (chưa quy đổi). Lấy đúng con số trong bảng.
+4. gioTH: Số GIỜ Thực hành, Thảo luận, Kiểm tra, Thi (Hệ số 1.0). Cộng dồn nếu các mục này nằm cùng một bài.
+   
+QUY TẮC QUAN TRỌNG:
+- TUYỆT ĐỐI KHÔNG TỰ QUY ĐỔI SANG TIẾT. Chỉ lấy số GIỜ thô từ tài liệu.
+- Phải bóc tách hết tất cả các bài, không bỏ sót dòng nào có chứa thời lượng.
+- Nếu một bài có nhiều dòng đề mục, hãy gộp chúng lại vào trường 'deMuc'.
+
+BẮT BUỘC TRẢ VỀ JSON ARRAY (KHÔNG CÓ TEXT GIẢI THÍCH):
 [
-  { "tenBai": "Bài 1", "deMuc": "Mục A, Mục B", "gioLT": 2, "gioTH": 4 },
+  { "tenBai": "Bài 1...", "deMuc": "Mục 1, Mục 2...", "gioLT": 2, "gioTH": 4 },
   ...
 ]
 
-Nội dung HTML cần phân tích:
+Nội dung cần phân tích:
 ${fileData.rawText}`;
       parts = [{ text: prompt }];
     } else if (fileData.data && fileData.mimeType) {
-      const prompt = `Bạn là chuyên gia bóc tách đề cương. Hãy đọc tài liệu và trích xuất TOÀN BỘ bài học thành mảng JSON.
+      const prompt = `Bạn là "Server AI Client" chuyên gia bóc tách tài liệu từ hình ảnh/PDF. Hãy đọc và trích xuất TOÀN BỘ bài học thành mảng JSON.
+
 YÊU CẦU:
-1. tenBai: Tên chương/bài lớn.
-2. deMuc: Tìm các đề mục con/chi tiết nếu có, gộp chúng lại thành một chuỗi, cách nhau bằng dấu phẩy. VD: '1. Khái niệm, 2. Phân loại'.
-3. gioLT: Số Giờ Lý thuyết nguyên bản.
-4. gioTH: Tổng Giờ Thực hành + Kiểm tra + Thi (Hệ số 1.0).
-TUYỆT ĐỐI KHÔNG QUY ĐỔI. Lấy đúng con số hiển thị trong tài liệu.
+1. tenBai: Tên bài học/chương.
+2. deMuc: Các đề mục con chi tiết (cách nhau bởi dấu phẩy).
+3. gioLT: Số GIỜ Lý thuyết (nguyên bản).
+4. gioTH: Tổng số GIỜ Thực hành + Kiểm tra + Thi (nguyên bản, hệ số 1.0).
+
+QUY TẮC:
+- Lấy đúng con số GIỜ hiển thị, KHÔNG tự quy đổi sang tiết.
+- Bóc tách đầy đủ, không tóm tắt.
 
 BẮT BUỘC trả về JSON Array:
-[{"tenBai": "Tên bài 1", "deMuc": "Mục 1, Mục 2", "gioLT": 2, "gioTH": 4}, ...]`;
+[{"tenBai": "...", "deMuc": "...", "gioLT": 2, "gioTH": 4}, ...]`;
       parts = [
         { text: prompt },
         { inlineData: { mimeType: fileData.mimeType, data: fileData.data } }

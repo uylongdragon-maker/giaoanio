@@ -117,6 +117,40 @@ BẮT BUỘC trả về JSON Array, KHÔNG có wrapper, KHÔNG có markdown:
     }
 
     // ══════════════════════════════════════════════════════════════════════
+    // MODE 1.5: EXTRACT SKELETON (Bóc tách khung sườn giáo án mẫu)
+    // ══════════════════════════════════════════════════════════════════════
+    if (mode === 'extract_skeleton') {
+      const prompt = `Bạn là "Server AI Client" chuyên gia bóc tách cấu trúc tài liệu. 
+Dưới đây là nội dung HTML của một file Giáo án mẫu. 
+
+NHIỆM VỤ:
+1. Hãy bóc tách TOÀN BỘ khung bảng biểu, quốc hiệu, tiêu đề, và các mục cố định của giáo án này.
+2. XÓA BỎ toàn bộ nội dung bài giảng cụ thể trong các ô của bảng, chỉ để lại các ô trống hoặc giữ lại tiêu đề cột.
+3. Trả về mã HTML "Sạch" chỉ chứa khung sườn (Skeleton) để sau này AI có thể điền nội dung mới vào.
+4. Đảm bảo giữ nguyên các thuộc tính border, width và font (Times New Roman).
+
+BẮT BUỘC chỉ trả về mã HTML THUẦN TÚY, không bọc trong markdown hay text giải thích.
+
+Nội dung HTML mẫu:
+${fileData?.rawText || prompt}`;
+
+      const resSkeleton = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${actualModel}:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 8192 }
+        })
+      });
+
+      const dataSkeleton = await resSkeleton.json();
+      if (!resSkeleton.ok) throw new Error(dataSkeleton.error?.message || "Lỗi bóc tách khung sườn.");
+
+      const skeletonHtml = dataSkeleton.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      return NextResponse.json({ text: skeletonHtml.replace(/```html/gi, '').replace(/```/g, '').trim() }, { status: 200 });
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
     // MODE 2: SIMULATE (Mô phỏng lớp học)
     // ══════════════════════════════════════════════════════════════════════
     if (mode === 'simulate') {
@@ -184,6 +218,7 @@ Tổng thời gian: ${formData?.totalMinutes || 45} phút. ${breakdown} ${topics
 Ghi chú: "${formData?.notes || 'Không có'}".
 Tài nguyên & Năng lực: ${wizardData?.competencies?.join(', ') || 'Chưa định nghĩa'}.
 ${chatContext}
+CẢNH BÁO TỐI CAO: Tổng thời lượng toàn bộ bài giảng BẮT BUỘC là ${body.formData?.totalMinutes || 45} phút. KHÔNG ĐƯỢC PHÂN BỔ THÀNH 6 GIỜ HOẶC SAI LỆCH SỐ PHÚT TRÊN. Bạn phải chia nhỏ ${body.formData?.totalMinutes || 45} phút này cho các bước (Dẫn nhập, Giảng bài, Thực hành...). Bỏ qua mọi con số gây nhiễu trong template.
 YÊU CẦU CỐT LÕI (BẮT BUỘC TUÂN THỦ 100%):
 1. QUY TẮC PHÂN BỔ NỘI DUNG:
    - Nếu có Tiết Lý thuyết: Tập trung vào truyền đạt kiến thức, dẫn dắt, giải thích.
