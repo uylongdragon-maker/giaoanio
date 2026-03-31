@@ -161,6 +161,7 @@ CHỈ TRẢ VỀ JSON DUY NHẤT, KHÔNG GIẢI THÍCH.`
     } catch (err) {
       console.error("AI Generation Error:", err);
       setError("AI Generation Error: " + err.message);
+      throw err; // Re-throw so the Modal can catch and show it
     } finally {
       setLoading(false);
     }

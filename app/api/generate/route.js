@@ -27,8 +27,8 @@ export async function POST(req) {
       let logs = [];
       let tried = new Set();
       
-      // FIXED CONFIGURATION: Only try the most reliable models to avoid spamming the API and triggering tighter rate limits.
-      const modelsToTry = ['gemini-2.5-flash', 'gemini-1.5-flash-latest', 'gemini-pro-latest'];
+      // FIXED CONFIGURATION: Use actual model first, then try the most reliable models to avoid spamming the API and triggering tighter rate limits.
+      const modelsToTry = [...new Set([actualModel, 'gemini-2.0-flash', 'gemini-1.5-flash-latest', 'gemini-pro-latest'])];
       
       const callModel = async (mId, isRetry = false) => {
         // We only use v1beta as v1 is consistently 404 for this key
@@ -95,11 +95,12 @@ export async function POST(req) {
     }
 
     if (mode === 'lesson_json') {
-      const lessonPrompt = `Generate JSON lesson plan for: "${body.formData?.lessonName}"`;
-      const { data } = await tryGemini([{ parts: [{ text: lessonPrompt }] }], { temperature: 0.7 });
+      const fullPrompt = `${systemPrompt || ''}\n\nDỮ LIỆU CỤ THỂ:\n${JSON.stringify(body.formData || {}, null, 2)}`;
+      const { data } = await tryGemini([{ parts: [{ text: fullPrompt }] }], { temperature: 0.7 });
       const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
       const match = text.match(/\{[\s\S]*\}/);
-      return NextResponse.json(JSON.parse(match ? match[0] : text.replace(/```json/gi, '').replace(/```/g, '').trim()), { status: 200 });
+      const cleanedJson = JSON.parse(match ? match[0] : text.replace(/```json/gi, '').replace(/```/g, '').trim());
+      return NextResponse.json(cleanedJson, { status: 200 });
     }
 
     const { data } = await tryGemini([{ parts: [{ text: body.promptText || body.prompt || '' }] }], { temperature: 0.7 });

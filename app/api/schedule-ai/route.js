@@ -80,8 +80,8 @@ CHỈ TRẢ VỀ JSON, KHÔNG GIẢI THÍCH.`;
       let logs = [];
       let tried = new Set();
 
-      // FIXED CONFIGURATION: Focus on reliable models
-      const modelsToTry = ['gemini-2.5-flash', 'gemini-1.5-flash-latest', 'gemini-pro-latest'];
+      // FIXED CONFIGURATION: Use actual model first, then try the most reliable models to avoid spamming the API and triggering tighter rate limits.
+      const modelsToTry = [...new Set([actualModel, 'gemini-2.0-flash', 'gemini-1.5-flash-latest', 'gemini-pro-latest'])];
 
       const callModel = async (mId, isRetry = false) => {
         // Enforce v1beta as v1 is consistently failing for this user's key

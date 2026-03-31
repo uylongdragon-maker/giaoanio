@@ -6,6 +6,7 @@ export default function SessionPreviewModal({ isOpen, onClose, session, onReset,
   const [editedActivities, setEditedActivities] = useState([]);
   const [lessonType, setLessonType] = useState('Lý thuyết'); // 'Lý thuyết', 'Thực hành', 'Tích hợp'
   const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState('');
 
   const totalMinutes = editedActivities.reduce((sum, act) => sum + (parseInt(act.phut) || 0), 0);
 
@@ -53,8 +54,14 @@ export default function SessionPreviewModal({ isOpen, onClose, session, onReset,
   const handleGenerateAI = async () => {
     if (onGenerateAI) {
       setGenerating(true);
-      await onGenerateAI({ ...session, lessonType });
-      setGenerating(false);
+      setError('');
+      try {
+        await onGenerateAI({ ...session, lessonType });
+      } catch (err) {
+        setError(err.message || 'Lỗi không xác định khi soạn giáo án.');
+      } finally {
+        setGenerating(false);
+      }
     }
   };
 
@@ -245,6 +252,19 @@ export default function SessionPreviewModal({ isOpen, onClose, session, onReset,
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar bg-white">
+          {error && (
+            <div className="mb-6 p-4 bg-rose-50 border border-rose-100 rounded-2xl flex items-start gap-3 animate-in shake duration-500">
+              <X className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-xs font-black text-rose-600 uppercase tracking-widest mb-1">Lỗi soạn bài</p>
+                <p className="text-xs text-rose-700 font-medium leading-relaxed">{error}</p>
+                <p className="text-[10px] text-rose-400 mt-2 italic">* Thầy/cô thử bấm "SOẠN LẠI" sau 30s-1p nếu gặp lỗi Quota (429).</p>
+              </div>
+              <button onClick={() => setError('')} className="ml-auto text-rose-400 hover:text-rose-600">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
           <div className="space-y-8">
             {/* Mục tiêu */}
             <section className="bg-indigo-50/30 rounded-[32px] p-6 border border-indigo-100 shadow-sm transition-all hover:shadow-md">
