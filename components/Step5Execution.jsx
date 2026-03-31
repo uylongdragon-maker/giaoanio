@@ -406,7 +406,7 @@ YÊU CẦU NGHIÊM NGẶT VỀ CẤU TRÚC JSON (4 CỘT):
                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-1">{session.totalPeriods || 4} TIẾT (180P)</span>
                        <div className={`text-[9px] font-black uppercase px-2 py-1 rounded-lg border transition-all ${
                           overallType?.normalize('NFC') === 'Tích hợp'.normalize('NFC') ? 'bg-indigo-50 border-indigo-100 text-indigo-600' :
-                          (overallType?.normalize('NFC') === 'Thực hành'.normalize('NFC') || session.contents.some(c => c.subItem?.toLowerCase().includes("kiểm tra"))) ? 'bg-amber-50 border-amber-100 text-amber-600' :
+                          (overallType?.normalize('NFC') === 'Thực hành'.normalize('NFC') || (session.contents || []).some(c => c.subItem?.toLowerCase().includes("kiểm tra"))) ? 'bg-amber-50 border-amber-100 text-amber-600' :
                           'bg-slate-50 border-slate-100 text-slate-500'
                        }`}>
                           {overallType}
