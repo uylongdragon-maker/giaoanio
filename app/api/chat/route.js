@@ -23,51 +23,105 @@ NHIỆM VỤ BẮT BUỘC (LỆNH THÉP):
 4. TUYỆT ĐỐI KHÔNG xuất code HTML ở bước này. Chỉ đóng vai trò người tư vấn, hỏi đáp.`;
 
     const MODEL_MAP = {
-      'gemini-3-flash-preview':   'gemini-3-flash-preview',
-      'gemini-3.0-flash-preview': 'gemini-3-flash-preview',
-      'gemini-3.1-pro-preview':   'gemini-3.1-pro-preview',
+      'gemini-1.5-flash':         'gemini-1.5-flash-latest',
+      'gemini-1.5-pro':           'gemini-1.5-pro-latest',
+      'gemini-3-flash-preview':   'gemini-1.5-flash-latest',
+      'gemini-3.0-flash-preview': 'gemini-1.5-flash-latest',
+      'gemini-3.1-pro-preview':   'gemini-1.5-pro-latest',
+      'gemini-2.5-pro':           'gemini-1.5-pro-latest',
+      'gemini-2.5-flash':         'gemini-1.5-flash-latest',
+      'gemini-2.0-flash':         'gemini-1.5-flash-latest',
+      'gemini-2.0-flash-exp':     'gemini-2.0-flash-exp',
       'openai-gpt4o-mini':        'gpt-4o-mini',
       'openai-gpt4o':             'gpt-4o',
-      'anthropic-sonnet':         'claude-3-5-sonnet-20240620'
+      'anthropic-sonnet':         'claude-3-5-sonnet-20240620',
     };
 
-    const actualModel = MODEL_MAP[modelType] || 'gemini-3-flash-preview';
+    let requestedModel = (modelType || 'gemini-1.5-flash').toLowerCase().trim();
+    if (requestedModel.startsWith('models/')) {
+      requestedModel = requestedModel.replace('models/', '');
+    }
+    const actualModel = MODEL_MAP[requestedModel] || requestedModel;
 
     let replyText = '';
 
     const safeModelType = modelType || '';
 
-    // ── 1. GOOGLE GEMINI ───────────────────────────────────
+    // ── 1. GOOGLE GEMINI (ROBUST RETRY) ───────────────────────────────────
     if (safeModelType.startsWith('gemini')) {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${actualModel}:generateContent?key=${apiKey}`;
-
-      // Chuyển history thành format của Gemini
-      const geminiContents = [
-        { role: 'user', parts: [{ text: systemPrompt }] },
-        { role: 'model', parts: [{ text: 'Tôi hiểu thưa bạn. Hãy bắt đầu.' }] }
-      ];
-      
-      history.forEach(msg => {
-        geminiContents.push({
-          role: msg.role === 'user' ? 'user' : 'model',
-          parts: [{ text: msg.content }]
+      const tryChatWithRetry = async () => {
+        const modelsToTry = [
+          actualModel, 
+          'gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash', 'gemini-flash-latest', 'gemini-pro-latest',
+          'gemini-1.5-flash-latest', 'gemini-1.5-flash', 'gemini-1.5-flash-001', 'gemini-1.5-flash-8b-latest', 'gemini-1.5-flash-8b',
+          'gemini-1.5-pro-latest', 'gemini-1.5-pro', 'gemini-1.5-pro-001',
+          'gemini-2.0-flash-exp', 
+          'gemini-1.0-pro-latest', 'gemini-1.0-pro', 'gemini-pro'
+        ];
+        const endpoints = ['v1beta', 'v1'];
+        
+        const geminiContents = [
+          { role: 'user', parts: [{ text: systemPrompt }] },
+          { role: 'model', parts: [{ text: 'Tôi hiểu thưa bạn. Hãy bắt đầu.' }] }
+        ];
+        history.forEach(msg => {
+          geminiContents.push({ role: msg.role === 'user' ? 'user' : 'model', parts: [{ text: msg.content }] });
         });
-      });
-      geminiContents.push({ role: 'user', parts: [{ text: message }] });
+        geminiContents.push({ role: 'user', parts: [{ text: message }] });
 
-      console.log("Đang gọi Gemini...");
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: geminiContents })
-      });
+        let lastError = null;
+        let lastErrorData = null;
 
-      const data = await res.json();
-      if (!res.ok) {
-        console.error("LỖI GEMINI API (chat):", data);
-        throw new Error(data.error?.message || 'Lỗi Gemini API');
+        for (const endpoint of endpoints) {
+          for (const mId of modelsToTry) {
+            try {
+              console.log(`[AI-Chat] Thử ${endpoint}/models/${mId}...`);
+              const url = `https://generativelanguage.googleapis.com/${endpoint}/models/${mId}:generateContent?key=${apiKey.trim()}`;
+              const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                  contents: geminiContents,
+                  generationConfig: { 
+                    ...(endpoint === 'v1beta' ? { responseMimeType: "application/json" } : {}),
+                    temperature: 0.7 
+                  }
+                })
+              });
+              const data = await res.json();
+              if (res.ok) return { res, data };
+              
+              lastErrorData = data;
+              lastError = data.error?.message || `Lỗi Gemini API (${res.status})`;
+              console.warn(`[AI-Chat] Thất bại: ${endpoint}/${mId} -> ${lastError}`);
+              if (lastError.includes("API key not valid")) throw new Error(lastError);
+            } catch (e) {
+              lastError = e.message;
+              if (lastError.includes("API key not valid")) throw new Error(lastError);
+            }
+          }
+        }
+        console.error("[AI-Chat] TẤT CẢ CỨU CÁNH ĐỀU THẤT BẠI. Lỗi cuối cùng:", lastErrorData);
+        
+        let availableModels = [];
+        try {
+          const listUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey.trim()}`;
+          const listRes = await fetch(listUrl);
+          const listData = await listRes.json();
+          availableModels = listData.models?.map(m => m.name.replace('models/', '')) || [];
+        } catch (diagErr) {}
+
+        const diagMsg = availableModels.length > 0 ? `\nModel khả dụng: ${availableModels.join(', ')}` : "";
+        throw new Error(`${lastError} ${diagMsg}`);
+      };
+
+      try {
+        const { res, data } = await tryChatWithRetry();
+        replyText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      } catch (err) {
+        console.error("LỖI CHAT GEMINI SAU RETRY:", err);
+        return NextResponse.json({ success: false, error: err.message }, { status: 500 });
       }
-      replyText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
     }
 
     // ── 2. OPENAI ───────────────────────────────────────────────────

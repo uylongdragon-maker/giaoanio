@@ -14,12 +14,11 @@ import SchedulingForm from '@/components/SchedulingForm';
 import { generateTimetable } from '@/app/utils/scheduler';
 
 const MODELS = [
-  { id: 'gemini-3.1-pro-preview',   modelId: 'gemini-3.1-pro-preview',   label: 'Gemini 3.1 Pro (🧠 Thông minh nhất)',   icon: '🤖' },
-  { id: 'gemini-3.0-flash-preview', modelId: 'gemini-3-flash-preview',   label: 'Gemini 3.0 Flash (⚡ Cực nhanh)',      icon: '⚡' },
-  { id: 'gemini-2.5-pro',           modelId: 'gemini-2.5-pro',           label: 'Gemini 2.5 Pro (🚀 Thế hệ mới)',     icon: '🚀' },
-  { id: 'gemini-2.5-flash',         modelId: 'gemini-2.5-flash',         label: 'Gemini 2.5 Flash (🔥 Hiệu năng)',    icon: '🔥' },
-  { id: 'gemini-2.0-flash',         modelId: 'gemini-2.0-flash',         label: 'Gemini 2.0 Flash (✨ Cân bằng)',     icon: '✨' },
-  { id: 'deep-research-pro-preview-12-2025', modelId: 'deep-research-pro-preview-12-2025', label: 'Deep Research (🔍 Chuyên sâu)', icon: '🔍' },
+  { id: 'gemini-2.5-pro',           modelId: 'gemini-2.5-pro',                 label: 'Gemini 2.5 Pro (🚀 Siêu cấp)',        icon: '🚀' },
+  { id: 'gemini-2.5-flash',         modelId: 'gemini-2.5-flash',               label: 'Gemini 2.5 Flash (💨 Hyper)',        icon: '💨' },
+  { id: 'gemini-1.5-pro',           modelId: 'gemini-1.5-pro-latest',           label: 'Gemini 1.5 Pro (🧠 Thông minh)',      icon: '🤖' },
+  { id: 'gemini-1.5-flash',         modelId: 'gemini-1.5-flash-latest',         label: 'Gemini 1.5 Flash (⚡ Tốc độ)',       icon: '⚡' },
+  { id: 'gemini-2.0-flash-exp',     modelId: 'gemini-2.0-flash-exp',            label: 'Gemini 2.0 Flash (✨ Cân bằng)',     icon: '✨' },
 ];
 
 export default function CourseWizard({ onComplete }) {
@@ -33,7 +32,7 @@ export default function CourseWizard({ onComplete }) {
   const [courseName, setCourseName] = useState('');
   const [syllabus, setSyllabus] = useState([]);
   const [scheduleConfig, setScheduleConfig] = useState(null);
-  const [modelType, setModelType] = useState('gemini-3.0-flash-preview');
+  const [modelType, setModelType] = useState('gemini-1.5-flash');
   const [finalSchedule, setFinalSchedule] = useState(null);
 
   useEffect(() => {
@@ -96,7 +95,7 @@ export default function CourseWizard({ onComplete }) {
           dayConfigs,
           holidayList,
           apiKey,
-          modelId: MODELS.find(m => m.id === modelType)?.modelId || modelType
+          modelId: MODELS.find(m => m.id === modelType)?.modelId || 'gemini-1.5-flash'
         })
       });
 

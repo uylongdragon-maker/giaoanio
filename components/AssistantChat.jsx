@@ -53,7 +53,7 @@ export default function AssistantChat({ lessonData, apiKey, modelType, onChatUpd
           history: messages,
           lessonData,
           apiKey,
-          modelType: modelType || 'gemini-3-flash-preview'
+          modelType: modelType || 'gemini-1.5-flash'
         }),
       });
 

@@ -5,13 +5,11 @@ import { Settings, Eye, EyeOff, CheckCircle, ChevronDown, KeyRound, Sparkles } f
 
 const MODELS = [
   // ── Google Gemini ──────────────────────────────────
-  { id: 'gemini-3.1-pro-preview',   modelId: 'gemini-3.1-pro-preview',   label: 'Gemini 3.1 Pro (🧠 Thông minh nhất)',   icon: '🤖', provider: 'gemini' },
-  { id: 'gemini-3.0-flash-preview', modelId: 'gemini-3-flash-preview', label: 'Gemini 3.0 Flash (⚡ Cực nhanh)',      icon: '⚡', provider: 'gemini' },
-  { id: 'gemini-2.5-pro',           modelId: 'gemini-2.5-pro',           label: 'Gemini 2.5 Pro (🚀 Thế hệ mới)',     icon: '🚀', provider: 'gemini' },
-  { id: 'gemini-2.5-flash',         modelId: 'gemini-2.5-flash',         label: 'Gemini 2.5 Flash (🔥 Hiệu năng)',    icon: '🔥', provider: 'gemini' },
-  { id: 'gemini-2.0-flash',         modelId: 'gemini-2.0-flash',         label: 'Gemini 2.0 Flash (✨ Cân bằng)',     icon: '✨', provider: 'gemini' },
-  { id: 'deep-research-pro-preview-12-2025', modelId: 'deep-research-pro-preview-12-2025', label: 'Deep Research (🔍 Chuyên sâu)', icon: '🔍', provider: 'gemini' },
-  { id: 'gemma-3-27b-it',           modelId: 'gemma-3-27b-it',           label: 'Gemma 3 27B (🌐 Cởi mở)',           icon: '🌐', provider: 'gemini' },
+  { id: 'gemini-2.5-flash',         modelId: 'gemini-2.5-flash',                label: 'Gemini 2.5 Flash (🚀 Đỉnh cao mới)',   icon: '🚀', provider: 'gemini' },
+  { id: 'gemini-2.5-pro',           modelId: 'gemini-2.5-pro',                  label: 'Gemini 2.5 Pro (🌌 Toàn năng)',        icon: '🌌', provider: 'gemini' },
+  { id: 'gemini-2.0-flash',         modelId: 'gemini-2.0-flash',                label: 'Gemini 2.0 Flash (✨ Cân bằng)',       icon: '✨', provider: 'gemini' },
+  { id: 'gemini-1.5-pro',           modelId: 'gemini-1.5-pro-latest',           label: 'Gemini 1.5 Pro (🧠 Thông minh)',       icon: '🤖', provider: 'gemini' },
+  { id: 'gemini-1.5-flash',         modelId: 'gemini-1.5-flash-latest',         label: 'Gemini 1.5 Flash (⚡ Tốc độ)',         icon: '⚡', provider: 'gemini' },
   // ── OpenAI ─────────────────────────────────────────
   { id: 'openai-gpt4o-mini', modelId: 'gpt-4o-mini',                label: 'OpenAI GPT-4o Mini',                   icon: '✨', provider: 'openai' },
   { id: 'openai-gpt4o',      modelId: 'gpt-4o',                     label: 'OpenAI GPT-4o',                        icon: '🌟', provider: 'openai' },
@@ -22,7 +20,7 @@ const MODELS = [
 const STORAGE_KEY = 'giao_an_io_config';
 
 export default function AIConfig({ onConfigSaved }) {
-  const [modelType, setModelType] = useState('gemini-3.0-flash-preview');
+  const [modelType, setModelType] = useState('gemini-1.5-flash');
   const [apiKey, setApiKey] = useState('');
   const [saved, setSaved] = useState(false);
   const [maskedKey, setMaskedKey] = useState('');
@@ -35,13 +33,37 @@ export default function AIConfig({ onConfigSaved }) {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const config = JSON.parse(stored);
-        let mType = config.modelType || 'gemini-1.5-flash-latest';
+        
+        // MIGRATION: Map legacy IDs to new ones
+        const MIGRATION_MAP = {
+          'gemini-3.0-flash-preview': 'gemini-1.5-flash',
+          'gemini-3-flash-preview':   'gemini-1.5-flash',
+          'gemini-3.1-pro-preview':   'gemini-1.5-pro',
+          'gemini-2.5-pro':           'gemini-1.5-pro',
+          'gemini-1.5-flash-latest':  'gemini-1.5-flash',
+          'gemini-1.5-pro-latest':    'gemini-1.5-pro',
+        };
+
+        let mType = config.modelType;
+        if (MIGRATION_MAP[mType]) {
+          console.log(`[AIConfig] Migrating legacy model ${mType} to ${MIGRATION_MAP[mType]}`);
+          mType = MIGRATION_MAP[mType];
+          // Update localStorage immediately with the new model
+          localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...config, modelType: mType }));
+        }
+
+        // Fallback if the model is still not in our valid list
+        if (!MODELS.find(m => m.id === mType)) {
+          mType = 'gemini-1.5-flash';
+        }
+
         setModelType(mType);
         setMaskedKey(maskKey(config.apiKey || ''));
         setSaved(true);
-        // if (onConfigSaved) onConfigSaved(config);
       }
-    } catch {}
+    } catch (e) {
+      console.error("[AIConfig] Load error:", e);
+    }
   }, []);
 
   function maskKey(key) {

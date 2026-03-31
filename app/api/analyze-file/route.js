@@ -10,125 +10,149 @@ export async function POST(req) {
       return NextResponse.json({ error: "Thiếu API Key." }, { status: 400 });
     }
 
-    const actualModel = modelId || modelType || 'gemini-3.0-flash-preview';
+    const MODEL_MAP = {
+      'gemini-1.5-flash':         'gemini-1.5-flash-latest',
+      'gemini-1.5-pro':           'gemini-1.5-pro-latest',
+      'gemini-3-flash-preview':   'gemini-1.5-flash-latest',
+      'gemini-3.0-flash-preview': 'gemini-1.5-flash-latest',
+      'gemini-3.1-pro-preview':   'gemini-1.5-pro-latest',
+      'gemini-2.5-pro':           'gemini-1.5-pro-latest',
+      'gemini-2.5-flash':         'gemini-1.5-flash-latest',
+      'gemini-2.0-flash':         'gemini-1.5-flash-latest',
+      'gemini-2.0-flash-exp':     'gemini-2.0-flash-exp',
+    };
+
+    let requestedModel = (modelId || modelType || 'gemini-1.5-flash').toLowerCase().trim();
+    if (requestedModel.startsWith('models/')) {
+      requestedModel = requestedModel.replace('models/', '');
+    }
+    const actualModel = MODEL_MAP[requestedModel] || requestedModel;
+
+    // --- UTILITY: ROBUST GEMINI CALLER (MULTI-VERSION & MULTI-MODEL RETRY) ---
+    const tryGemini = async (contents, genConfig = {}) => {
+      const modelsToTry = [
+        actualModel, 
+        'gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash', 'gemini-flash-latest', 'gemini-pro-latest',
+        'gemini-1.5-flash-latest', 'gemini-1.5-flash', 'gemini-1.5-flash-001', 'gemini-1.5-flash-8b-latest', 'gemini-1.5-flash-8b',
+        'gemini-1.5-pro-latest', 'gemini-1.5-pro', 'gemini-1.5-pro-001',
+        'gemini-2.0-flash-exp', 
+        'gemini-1.0-pro-latest', 'gemini-1.0-pro', 'gemini-pro'
+      ];
+      const endpoints = ['v1beta', 'v1'];
+      let lastError = null;
+      let lastErrorData = null;
+
+      for (const endpoint of endpoints) {
+        for (const mId of modelsToTry) {
+          try {
+            console.log(`[Gemini-File-Retry] Thử ${endpoint}/${mId}...`);
+            const url = `https://generativelanguage.googleapis.com/${endpoint}/models/${mId}:generateContent?key=${apiKey.trim()}`;
+            const res = await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents,
+                generationConfig: { 
+                  ...(endpoint === 'v1beta' ? { responseMimeType: "application/json" } : {}),
+                  ...genConfig 
+                }
+              })
+            });
+            const data = await res.json();
+            if (res.ok) return { res, data };
+            
+            lastErrorData = data;
+            lastError = data.error?.message || `Lỗi AI (${res.status})`;
+            console.warn(`[Gemini-File-Retry] Thất bại: ${endpoint}/${mId} -> ${lastError}`);
+            if (lastError.includes("API key not valid")) throw new Error(lastError);
+          } catch (e) {
+            lastError = e.message;
+            if (lastError.includes("API key not valid")) throw new Error(lastError);
+          }
+        }
+      }
+      console.error("[Gemini-File-Retry] TẤT CẢ CỨU CÁNH ĐỀU THẤT BẠI. Lỗi cuối cùng:", lastErrorData);
+
+      // DIAGNOSTIC
+      let availableModels = [];
+      try {
+        const listUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey.trim()}`;
+        const listRes = await fetch(listUrl);
+        const listData = await listRes.json();
+        availableModels = listData.models?.map(m => m.name.replace('models/', '')) || [];
+      } catch (diagErr) {}
+
+      const diagMsg = availableModels.length > 0 
+        ? `\nCác model khả dụng: ${availableModels.join(', ')}`
+        : `\nKhông thể liệt kê model (Cần kiểm tra API Key)`;
+
+      throw new Error(`${lastError}. ${diagMsg}`);
+    };
+
+
     let parts;
+    // ... construction continues ...
 
-    if (fileData.rawText) {
-      const prompt = `Bạn là "Server AI Client" chuyên gia bóc tách cấu trúc đề cương đào tạo. Hãy phân tích nội dung HTML/Text này và trích xuất dữ liệu bài học một cách chính xác tuyệt đối.
+    const prompt = `Bạn là chuyên gia bóc tách chương trình đào tạo chuyên nghiệp. 
+Nhiệm vụ: Duyệt qua toàn bộ nội dung file và trích xuất danh sách các bài học.
 
-YÊU CẦU TRÍCH XUẤT:
-1. tenBai: Tên bài học, chương hoặc học phần lớn.
-2. deMuc: Danh sách các đề mục nhỏ, tiểu mục hoặc nội dung chi tiết bên trong bài đó. Gộp thành chuỗi, cách nhau bằng dấu phẩy. VD: "1. Khái niệm, 2. Quy trình".
-3. gioLT: Số GIỜ Lý thuyết nguyên bản (chưa quy đổi). Lấy đúng con số trong bảng.
-4. gioTH: Số GIỜ Thực hành, Thảo luận, Kiểm tra, Thi (Hệ số 1.0). Cộng dồn nếu các mục này nằm cùng một bài.
-   
-QUY TẮC QUAN TRỌNG:
-- TUYỆT ĐỐI KHÔNG TỰ QUY ĐỔI SANG TIẾT. Chỉ lấy số GIỜ thô từ tài liệu.
-- Phải bóc tách hết tất cả các bài, không bỏ sót dòng nào có chứa thời lượng.
-- Nếu một bài có nhiều dòng đề mục, hãy gộp chúng lại vào trường 'deMuc'.
-
-BẮT BUỘC TRẢ VỀ JSON ARRAY (KHÔNG CÓ TEXT GIẢI THÍCH):
-[
-  { "tenBai": "Bài 1...", "deMuc": "Mục 1, Mục 2...", "gioLT": 2, "gioTH": 4 },
-  ...
-]
-
-Nội dung cần phân tích:
-${fileData.rawText}`;
-      parts = [{ text: prompt }];
-    } else if (fileData.data && fileData.mimeType) {
-      const prompt = `Bạn là "Server AI Client" chuyên gia bóc tách tài liệu từ hình ảnh/PDF. Hãy đọc và trích xuất TOÀN BỘ bài học thành mảng JSON.
-
-YÊU CẦU:
-1. tenBai: Tên bài học/chương.
-2. deMuc: Các đề mục con chi tiết (cách nhau bởi dấu phẩy).
-3. gioLT: Số GIỜ Lý thuyết (nguyên bản).
-4. gioTH: Tổng số GIỜ Thực hành + Kiểm tra + Thi (nguyên bản, hệ số 1.0).
+YÊU CẦU DỮ LIỆU:
+1. tenBai: Tên bài học hoặc chương lớn.
+2. deMuc: Các tiểu mục chi tiết bên trong (cách nhau bởi dấu phẩy).
+3. gioLT: Số GIỜ lý thuyết nguyên bản.
+4. gioTH: Số GIỜ thực hành/kiểm tra/thi (hệ số 1.0).
 
 QUY TẮC:
-- Lấy đúng con số GIỜ hiển thị, KHÔNG tự quy đổi sang tiết.
-- Bóc tách đầy đủ, không tóm tắt.
+- Trả về DUY NHẤT một mảng JSON Array các object bài học.
+- Sản phẩm cuối cùng phải là: [{"tenBai": "...", "deMuc": "...", "gioLT": X, "gioTH": Y}, ...]
+- Không bao gồm bất kỳ văn bản giải thích nào khác.`;
 
-BẮT BUỘC trả về JSON Array:
-[{"tenBai": "...", "deMuc": "...", "gioLT": 2, "gioTH": 4}, ...]`;
-      parts = [
-        { text: prompt },
-        { inlineData: { mimeType: fileData.mimeType, data: fileData.data } }
-      ];
+    if (fileData.rawText) {
+      parts = [{ text: `${prompt}\n\nNội dung cần trích xuất:\n${fileData.rawText}` }];
+    } else if (fileData.data && fileData.mimeType) {
+      parts = [{ text: prompt }, { inlineData: { mimeType: fileData.mimeType, data: fileData.data } }];
     } else {
       return NextResponse.json({ error: "Không có dữ liệu file để phân tích." }, { status: 400 });
     }
 
-    // QUY TẮC CHỌN MODEL ROBUST
-    let modelToTry = actualModel;
-    if (modelToTry === 'gemini-1.5-flash') modelToTry = 'gemini-1.5-flash-latest';
-    
-    const tryFetch = async (endpoint, modelId) => {
-      const url = `https://generativelanguage.googleapis.com/${endpoint}/models/${modelId}:generateContent?key=${apiKey.trim()}`;
-      
-      const payload = {
-        contents: [{ parts }],
-        generationConfig: {
-          responseMimeType: "application/json",
-          temperature: 0.1,
-          maxOutputTokens: 8192
-        }
-      };
-
-      return await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-    };
-
-    // THỬ MODEL ĐƯỢC CHỌN (Ví dụ: gemini-3.0-flash-preview)
-    console.log("Đang gọi Gemini...");
-    let res = await tryFetch('v1beta', actualModel);
-    let data = await res.json();
-
-    if (!res.ok) {
-      console.error("LỖI GOOGLE API:", data);
-      return NextResponse.json({ 
-        success: false, 
-        error: data.error?.message || `Google API trả về lỗi ${res.status}` 
-      }, { status: res.status });
-    }
-
-    let responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-    if (!responseText) {
-      return NextResponse.json({ 
-        error: "Lỗi AI (Rỗng)", 
-        details: "AI không trả về nội dung. Có thể do nội dung bị chặn hoặc model bận." 
-      }, { status: 500 });
-    }
-
-    // TRÍCH XUẤT JSON ROBUST
-    let cleanJson = responseText;
-    const firstBracket = responseText.search(/[\[\{]/);
-    const lastBracket = Math.max(responseText.lastIndexOf(']'), responseText.lastIndexOf('}'));
-    
-    if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
-      cleanJson = responseText.substring(firstBracket, lastBracket + 1);
-    } else {
-      cleanJson = responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
-    }
-
     try {
-      const parsedData = JSON.parse(cleanJson);
-      const lessonsArray = Array.isArray(parsedData) ? parsedData : (parsedData.lessons || []);
+      console.log(`[AI-Analyze] Đang bắt đầu với model: ${actualModel}...`);
+      const { data } = await tryGemini([{ parts }], { temperature: 0.1, maxOutputTokens: 8192 });
+      const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
       
-      if (lessonsArray.length === 0) {
-        throw new Error("Mảng bài học trống.");
+      if (!responseText) {
+        throw new Error("AI không trả về nội dung.");
+      }
+
+      // TRÍCH XUẤT JSON ROBUST
+      let lessonsArray = [];
+      try {
+        const startIdx = responseText.indexOf('[');
+        const endIdx = responseText.lastIndexOf(']');
+        if (startIdx !== -1 && endIdx !== -1) {
+          const jsonStr = responseText.substring(startIdx, endIdx + 1);
+          lessonsArray = JSON.parse(jsonStr);
+        } else {
+          const cleanJson = responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
+          const parsed = JSON.parse(cleanJson);
+          lessonsArray = Array.isArray(parsed) ? parsed : (parsed.lessons || parsed.data || []);
+        }
+      } catch (e) {
+        console.error("Lỗi parse JSON (analyze-file):", responseText);
+        throw new Error("Dữ liệu AI trả về không đúng cấu trúc JSON mong muốn.");
+      }
+
+      if (!Array.isArray(lessonsArray) || lessonsArray.length === 0) {
+        throw new Error("Không thể trích xuất được danh sách bài học nào.");
       }
 
       return NextResponse.json({ lessons: lessonsArray }, { status: 200 });
-    } catch (parseError) {
-      console.error("Lỗi Parse JSON. Chuỗi gốc từ AI:", responseText);
+    } catch (err) {
+      console.error("LỖI XỬ LÝ AI (analyze-file):", err);
       return NextResponse.json({ 
-        error: "Lỗi AI (Định dạng)", 
-        details: "AI trả về dữ liệu không đúng cấu trúc JSON mong muốn.",
-        raw: responseText.substring(0, 200)
+        success: false, 
+        error: err.message || "Lỗi xử lý AI bóc tách.",
+        details: "AI trả về dữ liệu không đúng cấu trúc JSON mong muốn."
       }, { status: 500 });
     }
 

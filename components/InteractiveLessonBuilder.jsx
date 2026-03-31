@@ -206,8 +206,7 @@ NHIỆM VỤ:
           prompt: "Tiến hành soạn thảo nội dung bài giảng chi tiết dựa trên khung sườn và ý tưởng đã thống nhất.",
           history: chatHistory,
           apiKey: aiConfig?.apiKey,
-          modelType: aiConfig?.modelType || aiConfig?.model,
-          modelId: aiConfig?.modelType || aiConfig?.model,
+          modelType: aiConfig?.modelType || 'gemini-1.5-flash',
           mode: 'generate',
           systemPrompt: systemMsg,
           formData: {
@@ -233,35 +232,34 @@ NHIỆM VỤ:
   };
 
   // --- EXPORT LOGIC ---
-  const exportWord = () => {
+  const exportWord = async () => {
+    setLoading(true);
     try {
-      // 1. Lấy nội dung HTML từ khung Preview (ví dụ lấy qua ID hoặc State)
       const content = previewRef.current?.innerHTML || previewContent;
+      
+      const res = await fetch('/api/export-docx', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          html: content,
+          title: sessionData.title
+        })
+      });
 
-      // 2. Bọc HTML vào bộ khung XML chuẩn của Microsoft Word
-      const header = `<html xmlns:o='urn:schemas-microsoft-com:office:office' 
-                            xmlns:w='urn:schemas-microsoft-com:office:word' 
-                            xmlns='http://www.w3.org/TR/REC-html40'>
-                      <head><meta charset='utf-8'><title>Giáo Án</title></head><body>`;
-      const footer = "</body></html>";
-      const sourceHTML = header + content + footer;
+      if (!res.ok) throw new Error("Không thể tạo file Word từ server.");
 
-      // 3. Tạo Blob với BOM (\ufeff) để không bị lỗi font tiếng Việt
-      const blob = new Blob(['\ufeff', sourceHTML], { type: 'application/msword' });
-
-      // 4. Tạo link tải xuống (Ép đuôi .doc để MS Word tự động convert)
+      const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      const fileName = `GiaoAn_${sessionData.title.replace(/\s+/g, '_')}.doc`;
-      link.download = fileName;
-      document.body.appendChild(link);
+      link.download = `GiaoAn_${sessionData.title.replace(/\s+/g, '_')}.docx`;
       link.click();
-      document.body.removeChild(link);
       URL.revokeObjectURL(url);
-      showToast("Đã tải xuống file Word thành công!");
+      showToast("Đã xuất file Word chuẩn thành công!");
     } catch (err) {
       showToast("Lỗi khi xuất file Word: " + err.message, 'error');
+    } finally {
+      setLoading(false);
     }
   };
 

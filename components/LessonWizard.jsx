@@ -100,7 +100,7 @@ export default function LessonWizard({ aiConfig, setAiConfig, sessionData, cours
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           apiKey: aiConfig.apiKey,
-          modelType: aiConfig.modelType || 'gemini-3-flash-preview',
+          modelType: aiConfig.modelType || 'gemini-1.5-flash',
           mode: 'generate',
           formData: lessonData,
           wizardData,
