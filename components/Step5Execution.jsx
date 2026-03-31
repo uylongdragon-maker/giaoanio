@@ -314,9 +314,10 @@ YÊU CẦU NGHIÊM NGẶT VỀ CẤU TRÚC JSON (4 CỘT):
         <div className="space-y-8 animate-in fade-in zoom-in-95">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {activeCourse.schedule.map((session, idx) => {
-              const uniqueLessons = Array.from(new Set(session.contents.map(c => c.lessonName)));
+              const safeContents = session.contents || [];
+              const uniqueLessons = Array.from(new Set(safeContents.map(c => c.lessonName)));
               
-              const processedContents = session.contents.map(c => {
+              const processedContents = safeContents.map(c => {
                 const name = (c.subItem || "").toLowerCase();
                 let type = c.type || 'Lý thuyết';
                 

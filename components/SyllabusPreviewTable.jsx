@@ -157,13 +157,21 @@ export default function SyllabusPreviewTable({ lessons, onConfirm, onCancel, onC
               <XCircle className="w-4 h-4" />
               Hủy & Up lại
             </button>
-            <button 
-              onClick={() => onConfirm(localLessons)}
-              className="px-6 py-2.5 rounded-2xl bg-indigo-600 hover:bg-slate-900 text-white font-black text-sm transition-all flex items-center gap-2 shadow-lg shadow-indigo-200 hover:-translate-y-0.5"
-            >
-              Chốt & Xếp Lịch
-              <ArrowRight className="w-4 h-4" />
-            </button>
+            <div className="group relative">
+              <button 
+                onClick={() => onConfirm(localLessons)}
+                disabled={totalPeriods === 0}
+                className="px-6 py-2.5 rounded-2xl bg-indigo-600 hover:bg-slate-900 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-black text-sm transition-all flex items-center gap-2 shadow-lg hover:shadow-indigo-200 hover:-translate-y-0.5"
+              >
+                Chốt & Xếp Lịch
+                <ArrowRight className="w-4 h-4" />
+              </button>
+              {totalPeriods === 0 && (
+                <div className="absolute -top-12 right-0 w-max bg-slate-800 text-white text-[11px] font-bold py-2 px-3 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl after:absolute after:-bottom-1 after:right-8 after:w-2 after:h-2 after:bg-slate-800 after:rotate-45">
+                  Vui lòng điền số giờ (LT/TH) cho bài học
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
