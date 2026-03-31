@@ -56,35 +56,51 @@ export default function SyllabusPreviewTable({ lessons, onConfirm, onCancel, onC
     setIsExporting(true);
     try {
       // Build a professional HTML table for the syllabus
-      const rowsHtml = localLessons.map((l, i) => `
+      const rowsHtml = localLessons.map((l, i) => {
+        const subItems = l.deMuc ? l.deMuc.split('\n').filter(item => item.trim() !== '') : [];
+        const rs = subItems.length + 1;
+        const sum = (parseFloat(l.gioLT)||0) + (parseFloat(l.gioTH)||0) + (parseFloat(l.gioKLT)||0) + (parseFloat(l.gioKTH)||0) + (parseFloat(l.gioTLT)||0) + (parseFloat(l.gioTTH)||0);
+
+        let html = `
         <tr>
-          <td align="center">${i + 1}</td>
+          <td align="center" rowspan="${rs}">${i + 1}</td>
           <td><b>${l.tenBai || ''}</b></td>
-          <td><span style="font-size: 9pt;">${l.deMuc || ''}</span></td>
-          <td align="center">${l.gioLT || 0}</td>
-          <td align="center">${l.gioTH || 0}</td>
-          <td align="center">${l.gioKLT || 0}</td>
-          <td align="center">${l.gioKTH || 0}</td>
-          <td align="center">${l.gioTLT || 0}</td>
-          <td align="center">${l.gioTTH || 0}</td>
-        </tr>
-      `).join('');
+          <td align="center" rowspan="${rs}"><b>${sum > 0 ? sum : ''}</b></td>
+          <td align="center" rowspan="${rs}">${(parseFloat(l.gioLT) > 0) ? l.gioLT : ''}</td>
+          <td align="center" rowspan="${rs}">${(parseFloat(l.gioTH) > 0) ? l.gioTH : ''}</td>
+          <td align="center" rowspan="${rs}">${(parseFloat(l.gioKLT) > 0) ? l.gioKLT : ''}</td>
+          <td align="center" rowspan="${rs}">${(parseFloat(l.gioKTH) > 0) ? l.gioKTH : ''}</td>
+          <td align="center" rowspan="${rs}">${(parseFloat(l.gioTLT) > 0) ? l.gioTLT : ''}</td>
+          <td align="center" rowspan="${rs}">${(parseFloat(l.gioTTH) > 0) ? l.gioTTH : ''}</td>
+        </tr>`;
+
+        subItems.forEach(item => {
+          html += `
+        <tr>
+          <td>${item}</td>
+        </tr>`;
+        });
+        
+        return html;
+      }).join('');
 
       const tableHtml = `
         <h2 style="text-align: center; text-transform: uppercase; font-family: 'Times New Roman';">BẢN PHÂN PHỐI CHƯƠNG TRÌNH</h2>
         <table border="1" style="border-collapse: collapse; width: 100%; font-family: 'Times New Roman'; font-size: 10pt;">
           <thead>
-            <tr style="background-color: #f2f2f2;">
-              <th rowspan="2" width="5%">STT</th>
-              <th rowspan="2" width="20%">Tên bài học/Chương</th>
-              <th rowspan="2" width="35%">Nội dung chi tiết</th>
-              <th colspan="2">Giảng dạy</th>
-              <th colspan="2">Kiểm tra</th>
+            <tr style="background-color: #f2f2f2; text-align: center;">
+              <th rowspan="3" width="5%">Số TT</th>
+              <th rowspan="3" width="30%">Tên chương, mục</th>
+              <th colspan="7">Thời gian (giờ)</th>
+            </tr>
+            <tr style="background-color: #f2f2f2; text-align: center;">
+              <th rowspan="2" width="5%">Tổng số</th>
+              <th rowspan="2" width="5%">Lý thuyết</th>
+              <th rowspan="2" width="15%">Thực hành, thí nghiệm, thảo luận, bài tập</th>
+              <th colspan="2">KT</th>
               <th colspan="2">Thi</th>
             </tr>
-            <tr style="background-color: #f2f2f2;">
-              <th width="5%">LT</th>
-              <th width="5%">TH</th>
+            <tr style="background-color: #f2f2f2; text-align: center;">
               <th width="5%">LT</th>
               <th width="5%">TH</th>
               <th width="5%">LT</th>
@@ -178,94 +194,104 @@ export default function SyllabusPreviewTable({ lessons, onConfirm, onCancel, onC
         {/* Table Container */}
         <div className="max-h-[550px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
           <table className="w-full text-left border-collapse">
-            <thead className="sticky top-0 bg-white/90 backdrop-blur-md z-10 border-b border-slate-100">
+            <thead className="sticky top-0 bg-white/90 backdrop-blur-md z-10 border-b border-slate-100 shadow-sm">
               <tr>
-                <th className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400 text-center w-12 text-[8px]">STT</th>
-                <th className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400 w-[180px]">Tên bài</th>
-                <th className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Đề mục</th>
-                <th className="px-2 py-4 text-[8px] font-black uppercase tracking-widest text-blue-400 text-center w-14">LT</th>
-                <th className="px-2 py-4 text-[8px] font-black uppercase tracking-widest text-emerald-400 text-center w-14">TH</th>
-                <th className="px-2 py-4 text-[8px] font-black uppercase tracking-widest text-amber-500 text-center w-14">KLT</th>
-                <th className="px-2 py-4 text-[8px] font-black uppercase tracking-widest text-amber-600 text-center w-14">KTH</th>
-                <th className="px-2 py-4 text-[8px] font-black uppercase tracking-widest text-rose-500 text-center w-14">TLT</th>
-                <th className="px-2 py-4 text-[8px] font-black uppercase tracking-widest text-rose-600 text-center w-14">TTH</th>
-                <th className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400 text-center w-8"></th>
+                <th rowSpan="3" className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400 text-center w-12 border-b border-r border-slate-200">Số TT</th>
+                <th rowSpan="3" className="px-5 py-4 text-[10px] font-black uppercase tracking-widest text-slate-800 w-[280px] border-b border-r border-slate-200 bg-indigo-50/50">Tên chương, mục</th>
+                <th colSpan="7" className="px-2 py-2 text-[10px] font-black uppercase tracking-widest text-slate-800 text-center border-b border-slate-200 bg-slate-50">Thời gian (giờ)</th>
+                <th rowSpan="3" className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400 text-center w-8 border-b border-l border-slate-200"></th>
+              </tr>
+              <tr>
+                <th rowSpan="2" className="px-2 py-2 text-[9px] font-black uppercase tracking-widest text-indigo-600 text-center w-14 border-b border-r border-slate-200 bg-indigo-50/30">Tổng số</th>
+                <th rowSpan="2" className="px-2 py-2 text-[9px] font-black uppercase tracking-widest text-blue-600 text-center w-16 border-b border-r border-slate-200 bg-blue-50/30">Lý thuyết</th>
+                <th rowSpan="2" className="px-2 py-2 text-[9px] font-black uppercase tracking-widest text-emerald-600 text-center w-28 border-b border-r border-slate-200 bg-emerald-50/30">Thực hành, thí nghiệm, bài tập</th>
+                <th colSpan="2" className="px-2 py-2 text-[9px] font-black uppercase tracking-widest text-amber-600 text-center border-b border-r border-slate-200 bg-amber-50/30">KT</th>
+                <th colSpan="2" className="px-2 py-2 text-[9px] font-black uppercase tracking-widest text-rose-600 text-center border-b border-slate-200 bg-rose-50/30">Thi</th>
+              </tr>
+              <tr>
+                <th className="px-2 py-2 text-[8px] font-black uppercase tracking-widest text-amber-500 text-center w-14 border-b border-r border-slate-200 bg-amber-50/10">LT</th>
+                <th className="px-2 py-2 text-[8px] font-black uppercase tracking-widest text-amber-600 text-center w-14 border-b border-r border-slate-200 bg-amber-100/10">TH</th>
+                <th className="px-2 py-2 text-[8px] font-black uppercase tracking-widest text-rose-500 text-center w-14 border-b border-r border-slate-200 bg-rose-50/10">LT</th>
+                <th className="px-2 py-2 text-[8px] font-black uppercase tracking-widest text-rose-600 text-center w-14 border-b border-slate-200 bg-rose-100/10">TH</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {localLessons.map((lesson, idx) => (
                 <tr key={lesson.id || idx} className="hover:bg-indigo-50/10 transition-colors group">
-                  <td className="px-4 py-4 text-xs font-bold text-slate-400 text-center">{idx + 1}</td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-4 text-xs font-bold text-slate-400 text-center border-r border-slate-100 align-top">{idx + 1}</td>
+                  <td className="px-4 py-3 border-r border-slate-100 align-top">
                     <input 
                       type="text"
                       value={lesson.tenBai || ''}
                       onChange={(e) => handleUpdate(idx, 'tenBai', e.target.value)}
-                      placeholder="..."
-                      className="w-full bg-slate-50/50 border border-slate-100 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-700 outline-none focus:ring-1 focus:ring-indigo-500 transition-all"
+                      placeholder="Tên chương/bài chính..."
+                      className="w-full bg-indigo-50/50 border border-indigo-100 rounded-lg px-2 py-1.5 text-xs font-bold text-indigo-900 outline-none focus:ring-1 focus:ring-indigo-500 transition-all mb-2 shadow-sm"
                     />
-                  </td>
-                  <td className="px-4 py-3">
                     <textarea 
                       value={lesson.deMuc || ''}
                       onChange={(e) => handleUpdate(idx, 'deMuc', e.target.value)}
-                      placeholder="..."
-                      rows={1}
-                      className="w-full bg-slate-50/50 border border-slate-100 rounded-lg px-2 py-1.5 text-xs text-slate-600 outline-none focus:ring-1 focus:ring-indigo-500 transition-all resize-none min-h-[32px]"
+                      placeholder="1. Đề mục con (xuống dòng cho nhiều mục)"
+                      rows={lesson.deMuc ? Math.max(2, lesson.deMuc.split('\n').length) : 2}
+                      className="w-full bg-slate-50 border border-slate-100 rounded-lg px-2 py-1.5 text-xs text-slate-600 outline-none focus:ring-1 focus:ring-indigo-500 transition-all resize-none min-h-[40px] leading-relaxed"
                     />
                   </td>
-                  <td className="px-1 py-3 text-center">
+                  <td className="px-1 py-3 text-center border-r border-slate-100 align-top">
+                    <div className="w-11 mx-auto bg-slate-100/50 border border-slate-200 rounded-lg px-1 py-1.5 text-center text-xs font-black text-slate-500">
+                      {(parseFloat(lesson.gioLT)||0) + (parseFloat(lesson.gioTH)||0) + (parseFloat(lesson.gioKLT)||0) + (parseFloat(lesson.gioKTH)||0) + (parseFloat(lesson.gioTLT)||0) + (parseFloat(lesson.gioTTH)||0)}
+                    </div>
+                  </td>
+                  <td className="px-1 py-3 text-center border-r border-slate-100 align-top">
                     <input 
                       type="number"
                       step="0.5"
                       value={lesson.gioLT ?? 0}
                       onChange={(e) => handleUpdate(idx, 'gioLT', e.target.value)}
-                      className="w-11 bg-blue-50/30 border border-blue-100 rounded-lg px-1 py-1.5 text-center text-xs font-black text-blue-600 outline-none"
+                      className="w-11 mx-auto bg-blue-50/30 border border-blue-100 rounded-lg px-1 py-1.5 text-center text-xs font-black text-blue-600 outline-none block"
                     />
                   </td>
-                  <td className="px-1 py-3 text-center">
+                  <td className="px-1 py-3 text-center border-r border-slate-100 align-top">
                     <input 
                       type="number"
                       step="0.5"
                       value={lesson.gioTH ?? 0}
                       onChange={(e) => handleUpdate(idx, 'gioTH', e.target.value)}
-                      className="w-11 bg-emerald-50/30 border border-emerald-100 rounded-lg px-1 py-1.5 text-center text-xs font-black text-emerald-600 outline-none"
+                      className="w-14 mx-auto bg-emerald-50/30 border border-emerald-100 rounded-lg px-1 py-1.5 text-center text-xs font-black text-emerald-600 outline-none block"
                     />
                   </td>
-                  <td className="px-1 py-3 text-center">
+                  <td className="px-1 py-3 text-center border-r border-slate-100 align-top">
                     <input 
                       type="number"
                       step="0.5"
                       value={lesson.gioKLT ?? 0}
                       onChange={(e) => handleUpdate(idx, 'gioKLT', e.target.value)}
-                      className="w-11 bg-amber-50/30 border border-amber-100 rounded-lg px-1 py-1.5 text-center text-xs font-black text-amber-500 outline-none"
+                      className="w-11 mx-auto bg-amber-50/30 border border-amber-100 rounded-lg px-1 py-1.5 text-center text-xs font-black text-amber-500 outline-none block"
                     />
                   </td>
-                  <td className="px-1 py-3 text-center">
+                  <td className="px-1 py-3 text-center border-r border-slate-100 align-top">
                     <input 
                       type="number"
                       step="0.5"
                       value={lesson.gioKTH ?? 0}
                       onChange={(e) => handleUpdate(idx, 'gioKTH', e.target.value)}
-                      className="w-11 bg-amber-100/30 border border-amber-200 rounded-lg px-1 py-1.5 text-center text-xs font-black text-amber-700 outline-none"
+                      className="w-11 mx-auto bg-amber-100/30 border border-amber-200 rounded-lg px-1 py-1.5 text-center text-xs font-black text-amber-700 outline-none block"
                     />
                   </td>
-                  <td className="px-1 py-3 text-center">
+                  <td className="px-1 py-3 text-center border-r border-slate-100 align-top">
                     <input 
                       type="number"
                       step="0.5"
                       value={lesson.gioTLT ?? 0}
                       onChange={(e) => handleUpdate(idx, 'gioTLT', e.target.value)}
-                      className="w-11 bg-rose-50/30 border border-rose-100 rounded-lg px-1 py-1.5 text-center text-xs font-black text-rose-500 outline-none"
+                      className="w-11 mx-auto bg-rose-50/30 border border-rose-100 rounded-lg px-1 py-1.5 text-center text-xs font-black text-rose-500 outline-none block"
                     />
                   </td>
-                  <td className="px-1 py-3 text-center">
+                  <td className="px-1 py-3 text-center border-r border-slate-100 align-top">
                     <input 
                       type="number"
                       step="0.5"
                       value={lesson.gioTTH ?? 0}
                       onChange={(e) => handleUpdate(idx, 'gioTTH', e.target.value)}
-                      className="w-11 bg-rose-100/30 border border-rose-200 rounded-lg px-1 py-1.5 text-center text-xs font-black text-rose-700 outline-none"
+                      className="w-11 mx-auto bg-rose-100/30 border border-rose-200 rounded-lg px-1 py-1.5 text-center text-xs font-black text-rose-700 outline-none block"
                     />
                   </td>
                   <td className="px-2 py-3 text-center">

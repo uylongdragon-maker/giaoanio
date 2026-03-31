@@ -12,21 +12,36 @@ export default function Step3DataInput() {
   const [error, setError] = useState('');
 
   const handleDownloadTemplate = () => {
-    const header = [
-      "STT", 
-      "Tên bài học/Chương", 
-      "Nội dung chi tiết (Đề mục)", 
-      "LT", "TH", "Kiểm tra LT", "Kiểm tra TH", "Thi LT", "Thi TH"
-    ];
-    // Add some guiding data
-    const sampleRow1 = [1, "Chương 1: Giới thiệu chung", "1.1 Khái niệm cơ bản\n1.2 Tầm quan trọng", 2, 0, 0, 0, 0, 0];
-    const sampleRow2 = [2, "Bài 1: Thực hành nhập môn", "- Làm quen luồng công việc\n- Set up dự án", 0, 4, 0, 0, 0, 0];
+    // Row 1
+    const row1 = ["Số TT", "Tên chương, mục", "Thời gian (giờ)", "", "", "", "", "", ""];
+    // Row 2
+    const row2 = ["", "", "Tổng số", "Lý thuyết", "Thực hành, thí nghiệm, thảo luận, bài tập", "KT", "", "Thi", ""];
+    // Row 3
+    const row3 = ["", "", "", "", "", "LT", "TH", "LT", "TH"];
     
-    // Create worksheet
-    const ws = XLSX.utils.aoa_to_sheet([header, sampleRow1, sampleRow2]);
+    // Sample Data
+    const sampleRow4 = [1, "Bài 1: Tổng quan", 3, 3, null, null, null, null, null];
+    const sampleRow5 = [null, "1. Giới thiệu Lịch sử điện ảnh", null, null, null, null, null, null, null];
+    const sampleRow6 = [null, "2. Nghệ thuật thứ 7", null, null, null, null, null, null, null];
+    const sampleRow7 = [2, "Bài 2: Thực hành cơ bản", 4, 0, 4, null, null, null, null];
+    const sampleRow8 = [null, "1. Thao tác nhanh", null, null, null, null, null, null, null];
+    
+    const ws = XLSX.utils.aoa_to_sheet([row1, row2, row3, sampleRow4, sampleRow5, sampleRow6, sampleRow7, sampleRow8]);
+    
+    // Merge Cells to make it look professional
+    ws['!merges'] = [
+      { s: {r:0, c:0}, e: {r:2, c:0} }, // Số TT
+      { s: {r:0, c:1}, e: {r:2, c:1} }, // Tên chương, mục
+      { s: {r:0, c:2}, e: {r:0, c:8} }, // Thời gian (giờ)
+      { s: {r:1, c:2}, e: {r:2, c:2} }, // Tổng số
+      { s: {r:1, c:3}, e: {r:2, c:3} }, // Lý thuyết
+      { s: {r:1, c:4}, e: {r:2, c:4} }, // Thực hành...
+      { s: {r:1, c:5}, e: {r:1, c:6} }, // KT
+      { s: {r:1, c:7}, e: {r:1, c:8} }, // Thi
+    ];
+
     ws['!cols'] = [
-      {wch: 5}, {wch: 30}, {wch: 40}, 
-      {wch: 8}, {wch: 8}, {wch: 12}, {wch: 12}, {wch: 8}, {wch: 8}
+      {wch: 8}, {wch: 45}, {wch: 8}, {wch: 8}, {wch: 15}, {wch: 5}, {wch: 5}, {wch: 5}, {wch: 5}
     ];
     
     const wb = XLSX.utils.book_new();
@@ -52,24 +67,44 @@ export default function Step3DataInput() {
         const worksheet = workbook.Sheets[worksheetName];
         const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
         
-        // Skip header row(s). Assume row 0 is header.
-        for (let i = 1; i < jsonData.length; i++) {
+        let currentLesson = null;
+        let lessonIdx = 0;
+
+        // Skip header rows (typically 0, 1, 2)
+        for (let i = 3; i < jsonData.length; i++) {
           const row = jsonData[i];
-          if (!row || row.length === 0 || !row[1]) continue; 
+          if (!row || row.length === 0) continue; 
           
-          parsedSyllabus.push({
-            id: `lesson-xls-${Date.now()}-${i}`,
-            tenBai: row[1] ? String(row[1]) : '',
-            deMuc: row[2] ? String(row[2]) : '',
-            gioLT: parseFloat(row[3]) || 0,
-            gioTH: parseFloat(row[4]) || 0,
-            gioKLT: parseFloat(row[5]) || 0,
-            gioKTH: parseFloat(row[6]) || 0,
-            gioTLT: parseFloat(row[7]) || 0,
-            gioTTH: parseFloat(row[8]) || 0,
-            status: 'Chưa soạn'
-          });
+          const stt = row[0];
+          const textContent = row[1] ? String(row[1]).trim() : '';
+
+          if (stt !== undefined && stt !== null && stt !== "" && textContent) {
+            // New Chapter/Lesson
+            if (currentLesson) parsedSyllabus.push(currentLesson);
+            lessonIdx++;
+            
+            // Lấy trực tiếp LT/TH chứ không lấy Tổng số (row[2]) để hệ thống chủ động tính
+            currentLesson = {
+              id: `lesson-xls-${Date.now()}-${lessonIdx}`,
+              tenBai: textContent,
+              deMuc: '',
+              gioLT: parseFloat(row[3]) || 0,
+              gioTH: parseFloat(row[4]) || 0,
+              gioKLT: parseFloat(row[5]) || 0,
+              gioKTH: parseFloat(row[6]) || 0,
+              gioTLT: parseFloat(row[7]) || 0,
+              gioTTH: parseFloat(row[8]) || 0,
+              status: 'Chưa soạn'
+            };
+          } else if (textContent && currentLesson) {
+            // Continuation row (Sub-items)
+            currentLesson.deMuc = currentLesson.deMuc 
+              ? currentLesson.deMuc + '\n' + textContent 
+              : textContent;
+          }
         }
+        if (currentLesson) parsedSyllabus.push(currentLesson);
+        
       } else if (fileName.endsWith('.docx')) {
         const arrayBuffer = await file.arrayBuffer();
         const result = await mammoth.convertToHtml({ arrayBuffer });
