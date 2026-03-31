@@ -44,7 +44,34 @@ export async function POST(req) {
     if (requestedModel.startsWith('models/')) requestedModel = requestedModel.replace('models/', '');
     let actualModel = MODEL_MAP[requestedModel] || requestedModel;
 
-    const fullPrompt = `ĐỀ CƯƠNG: ${JSON.stringify(syllabus, null, 2)}\n\nLỊCH TRÌNH: ${JSON.stringify(targetSessions, null, 2)}\n\nNHIỆM VỤ: Phân bổ Đề cương vào Lịch trình (1h LT=1 Tiết, 1h TH=1.33 Tiết). TRẢ VỀ JSON ARRAY.`;
+    const fullPrompt = `Bạn là chuyên gia sư phạm xếp lịch giảng dạy. 
+NHIỆM VỤ: Phân bổ nội dung từ ĐỀ CƯƠNG vào các buổi trong LỊCH TRÌNH.
+
+DỮ LIỆU ĐẦU VÀO:
+- ĐỀ CƯƠNG: ${JSON.stringify(syllabus)}
+- LỊCH TRÌNH: ${JSON.stringify(targetSessions)} (mỗi buổi có pLimit là số tiết, thường là 4 tiết = 180 phút).
+
+QUY TẮC BẮT BUỘC:
+1. TỔNG THỜI LƯỢNG: Mỗi buổi học (Session) PHẢI được lấp đầy đúng số tiết pLimit của buổi đó.
+2. TỶ LỆ QUY ĐỔI: 1 giờ Lý thuyết (gioLT) = 1 Tiết (45p). 1 giờ khác (TH/KT/Thi) = 1.33 Tiết (60p).
+3. CHIA NHỎ BÀI HỌC (SPLITTING): Nếu một bài trong Đề cương có tổng số tiết lớn hơn pLimit của một buổi, bạn PHẢI chia bài đó ra nhiều buổi. Ví dụ Bài A có 6 tiết, buổi 1 dạy 4 tiết, buổi 2 dạy nốt 2 tiết.
+4. KIỂM TRA (gioKLT/gioKTH): Luôn là 1 tiết (45 phút). Có thể ghép chung với bài học khác trong cùng một buổi 180p.
+5. THI KẾT THÚC (gioTLT/gioTTH): Phải chiếm TRỌN VẸN 1 buổi (180 phút / 4 tiết). Không ghép thi với bài học khác.
+6. TÍNH ĐA DẠNG: Ưu tiên ghép LT và TH trong cùng một buổi để tạo giáo án Tích hợp, trừ khi bài đó thuần LT hoặc thuần TH.
+7. NỘI DUNG: Mỗi phần trong 'contents' phải ghi rõ 'gioLT_used' và 'gioTH_used' (số giờ thực tế, không phải số tiết quy đổi).
+
+CẤU TRÚC TRẢ VỀ (JSON ARRAY):
+[
+  {
+    "id": "session-1",
+    "date": "YYYY-MM-DD",
+    "totalPeriods": 4,
+    "contents": [
+      { "tenBai": "Tên bài", "subItem": "Mô tả nội dung", "gioLT_used": 1, "gioTH_used": 2.25 }
+    ]
+  }
+]
+CHỈ TRẢ VỀ JSON, KHÔNG GIẢI THÍCH.`;
 
     const delay = (ms) => new Promise(res => setTimeout(res, ms));
 

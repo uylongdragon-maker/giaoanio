@@ -206,9 +206,9 @@ export default function SessionPreviewModal({ isOpen, onClose, session, onReset,
                 <Clock className="w-3 h-3" />
                 {totalMinutes} / 180 PHÚT
               </div>
-              {totalMinutes !== 180 && (
-                <span className="text-[8px] font-bold text-slate-400 mt-1 uppercase italic">
-                   {totalMinutes > 180 ? `Vượt quá ${totalMinutes - 180}p` : `Còn thiếu ${180 - totalMinutes}p`}
+              {totalMinutes !== (session.totalPeriods * 45) && (
+                <span className={`text-[9px] font-black mt-1 uppercase italic ${totalMinutes > (session.totalPeriods * 45) ? 'text-rose-500' : 'text-amber-500'}`}>
+                   {totalMinutes > (session.totalPeriods * 45) ? `⚠️ LỐ BIÊN ĐỘ: +${totalMinutes - (session.totalPeriods * 45)}p` : `⚠️ CHƯA ĐỦ: -${(session.totalPeriods * 45) - totalMinutes}p`}
                 </span>
               )}
             </div>
@@ -331,9 +331,9 @@ export default function SessionPreviewModal({ isOpen, onClose, session, onReset,
                               placeholder="Tên hoạt động..."
                             />
                             {act.phut > 15 && (
-                              <div className="flex items-center gap-1 px-2 py-0.5 bg-rose-500 text-white text-[8px] font-black rounded-lg animate-bounce whitespace-nowrap">
-                                <Clock className="w-2 h-2" />
-                                QUÁ 15P!
+                              <div className="flex items-center gap-1 px-2 py-1 bg-rose-600 text-white text-[9px] font-black rounded-lg animate-bounce shadow-lg shadow-rose-200 whitespace-nowrap">
+                                <Clock className="w-2.5 h-2.5" />
+                                LỐ 15 PHÚT!
                               </div>
                             )}
                           </div>
@@ -405,13 +405,13 @@ export default function SessionPreviewModal({ isOpen, onClose, session, onReset,
                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Thời lượng tổng cộng (Quy chuẩn):</span>
                <div className="flex items-center gap-2">
                  <span className={`text-xl font-black ${totalMinutes === 180 ? 'text-emerald-600' : 'text-slate-900'}`}>{totalMinutes} Phút</span>
-                 {totalMinutes === 180 ? (
-                   <div className="flex items-center gap-1 text-[8px] font-black bg-emerald-500 text-white px-2 py-0.5 rounded-full uppercase">
-                     <CheckCircle2 className="w-2.5 h-2.5" /> KHỚP 180P
+                 {totalMinutes === (session.totalPeriods * 45) ? (
+                   <div className="flex items-center gap-1 text-[9px] font-black bg-emerald-600 text-white px-3 py-1 rounded-full uppercase shadow-md shadow-emerald-100">
+                     <CheckCircle2 className="w-3 h-3" /> ĐÚNG {session.totalPeriods * 45}P
                    </div>
                  ) : (
-                   <div className="flex items-center gap-1 text-[8px] font-black bg-amber-500 text-white px-2 py-0.5 rounded-full uppercase whitespace-nowrap">
-                     {totalMinutes > 180 ? `LỆCH +${totalMinutes - 180}P` : `LỆCH -${180 - totalMinutes}P`}
+                   <div className={`flex items-center gap-1 text-[9px] font-black text-white px-3 py-1 rounded-full uppercase whitespace-nowrap shadow-md ${totalMinutes > (session.totalPeriods * 45) ? 'bg-rose-600 shadow-rose-100' : 'bg-amber-600 shadow-amber-100'}`}>
+                     {totalMinutes > (session.totalPeriods * 45) ? `LỐ ${totalMinutes - (session.totalPeriods * 45)}P` : `THIẾU ${(session.totalPeriods * 45) - totalMinutes}P`}
                    </div>
                  )}
                </div>

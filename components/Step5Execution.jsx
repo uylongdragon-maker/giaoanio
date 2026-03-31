@@ -116,25 +116,30 @@ export default function Step5Execution({ aiConfig }) {
           formData: {
             lessonName: sessionParam.contents.map(c => c.lessonName).join(' & '),
             topics: sessionParam.contents.map(c => c.subItem),
-            totalMinutes: 180,
+            totalMinutes: sessionParam.totalPeriods * 45,
             notes: (activeCourse.courseContext || "") + `\n\n[MẪU GIÁO ÁN ${finalType.toUpperCase()} RIÊNG BIỆT]:\n` + template,
             lessonType: finalType
           },
           systemPrompt: `BẠN LÀ CHUYÊN GIA BIÊN SOẠN GIÁO ÁN SƯ PHẠM ĐẲNG CẤP.
-Nhiệm vụ: Soạn giáo án CHI TIẾT loại ${finalType.toUpperCase()} dựa trên Đề cương và [MẪU GIÁO ÁN].
+Nhiệm vụ: Soạn giáo án CHI TIẾT loại ${finalType.toUpperCase()} dựa trên ĐỀ CƯƠNG và [MẪU GIÁO ÁN].
 
-YÊU CẦU NGHIÊM NGẶT VỀ CẤU TRÚC JSON (4 CỘT):
-1. Mỗi đối tượng trong mảng "activities" PHẢI có đầy đủ các trường sau:
-   - "segmentTitle": Tiêu đề hoạt động (VD: "Ổn định lớp", "Dẫn nhập", "Thực hành...")
-   - "phut": Thời gian (Số nguyên, tổng phải đúng 180).
+DỮ LIỆU ĐỀ CƯƠNG:
+- Tên bài: ${sessionParam.contents.map(c => c.lessonName).join(' & ')}
+- Các tiểu mục/hoạt động: ${sessionParam.contents.map(c => c.subItem).join(', ')}
+
+YÊU CẦU NGHIÊM NGẶT:
+1. BÁM SÁT ĐỀ CƯƠNG: Sử dụng chính xác các tiểu mục trong đề cương làm tiêu đề hoặc nội dung cốt lõi của hoạt động.
+2. QUY TẮC 15 PHÚT: KHÔNG ĐƯỢC PHÂN BỔ BẤT KỲ HOẠT ĐỘNG NÀO VƯỢT QUÁ 15 PHÚT. Nếu một mục tiêu bài giảng cần nhiều thời gian hơn, hãy chia nhỏ nó thành nhiều phần (VD: Phần 1, Phần 2...).
+3. TỔNG THỜI LƯỢNG: Tổng cột 'phut' PHẢI BẰNG ĐÚNG ${sessionParam.totalPeriods * 45} phút.
+4. CẤU TRÚC JSON (4 CỘT):
+   - "segmentTitle": Tiêu đề hoạt động (VD: "Ổn định lớp", "1.1. Máy ảnh là gì?").
+   - "phut": Thời gian (Số nguyên).
    - "noi_dung": Tóm tắt nội dung kiến thức.
    - "teacherAct": Hoạt động CHI TIẾT của Giáo viên (Dùng số thứ tự 1, 2, 3...).
    - "studentAct": Hoạt động CHI TIẾT của Học sinh (Dùng số thứ tự 1, 2, 3...).
    - "ghi_chu": Ghi chú.
-
-2. TRÌNH BÀY: TRONG CÁC Ô teacherAct VÀ studentAct, PHẢI CHỈ RÕ CÁC BƯỚC BẰNG SỐ THỨ TỰ 1, 2, 3... ĐỂ TĂNG TÍNH KHOA HỌC.
-3. QUY TẮC THỜI GIAN: Tổng "phut" đúng 180.
-4. ĐỊNH DẠNG: Trả về JSON duy nhất: { "objectives": "...", "activities": [ {"segmentTitle": "...", "phut": 10, "noi_dung": "...", "teacherAct": "1. ...", "studentAct": "1. ...", "ghi_chu": "..." }, ... ] }.`
+5. TRÌNH BÀY: TRONG CÁC Ô teacherAct VÀ studentAct, PHẢI CHỈ RÕ CÁC BƯỚC BẰNG SỐ THỨ TỰ 1, 2, 3... ĐỂ TĂNG TÍNH KHOA HỌC.
+CHỈ TRẢ VỀ JSON DUY NHẤT, KHÔNG GIẢI THÍCH.`
         })
       });
 
