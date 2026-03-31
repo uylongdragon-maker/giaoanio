@@ -345,7 +345,7 @@ export default function SyllabusPreviewTable({ lessons, onConfirm, onCancel, onC
             </div>
             <div>
               <p className="text-[10px] uppercase font-black tracking-widest text-slate-400">Tổng Giờ TH/KT</p>
-              <p className="text-xl font-black text-emerald-700">{totalTH.toFixed(1)} <span className="text-xs">giờ</span></p>
+              <p className="text-xl font-black text-emerald-700">{totalOther.toFixed(1)} <span className="text-xs">giờ</span></p>
             </div>
           </div>
 
