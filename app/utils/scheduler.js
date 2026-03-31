@@ -16,17 +16,18 @@ export function generateTimetable(syllabus, startDate, dayConfigs, holidayList =
   let allBlocks = [];
 
   syllabus.forEach((item, idx) => {
-    // Tổng hợp giờ từ tất cả các cột
-    const hLt = (parseFloat(item.gioLT) || 0) + (parseFloat(item.gioKLT) || 0) + (parseFloat(item.gioTLT) || 0);
-    const hTh = (parseFloat(item.gioTH) || 0) + (parseFloat(item.gioKTH) || 0) + (parseFloat(item.gioTTH) || 0);
+    // Chỉ có Lý Thuyết (LT) là 45 phút / tiết
+    const hLt = parseFloat(item.gioLT) || 0;
+    // TH, KLT, KTH, TLT, TTH đều là 60 phút / giờ -> Scale x 60/45
+    const hOthers = (parseFloat(item.gioTH) || 0) + (parseFloat(item.gioKLT) || 0) + (parseFloat(item.gioKTH) || 0) + (parseFloat(item.gioTLT) || 0) + (parseFloat(item.gioTTH) || 0);
     
     // Nhận diện loại bài (Thi, Kiểm tra)
     const name = (item.tenBai || "").toLowerCase();
-    const isFinalExam = name.includes("thi kết thúc") || name.includes("thi tốt nghiệp") || (parseFloat(item.gioTTH) > 0);
+    const isFinalExam = name.includes("thi kết thúc") || name.includes("thi tốt nghiệp") || (parseFloat(item.gioTTH) > 0) || (parseFloat(item.gioTLT) > 0);
     const isPeriodicTest = name.includes("kiểm tra") || (parseFloat(item.gioKLT) > 0) || (parseFloat(item.gioKTH) > 0);
 
     const pLt = hLt;
-    const pTh = Math.round(hTh * 60 / 45);
+    const pTh = Math.round(hOthers * 60 / 45);
     
     const subList = (item.deMuc || "").split(',').map(s => s.trim()).filter(Boolean);
     const effectiveSubItems = subList.length > 0 ? subList.join(", ") : (item.tenBai || `Bài ${idx + 1}`);

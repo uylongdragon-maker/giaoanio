@@ -51,9 +51,9 @@ export default function SchedulingForm({ lessons, onScheduleComplete }) {
   };
 
   const totalPeriods = lessons.reduce((sum, l) => {
-    const glt = parseFloat(l.gioLT || 0);
-    const gth = parseFloat(l.gioTH || 0);
-    return sum + glt + (gth * (60 / 45)); // Quy đổi 60/45 cho TH/KT (1h TH = 1.33 tiết)
+    const lt = parseFloat(l.gioLT) || 0;
+    const others = (parseFloat(l.gioTH) || 0) + (parseFloat(l.gioKLT) || 0) + (parseFloat(l.gioKTH) || 0) + (parseFloat(l.gioTLT) || 0) + (parseFloat(l.gioTTH) || 0);
+    return sum + lt + (others * (60 / 45));
   }, 0);
   
   const calculateProjectedEnd = () => {

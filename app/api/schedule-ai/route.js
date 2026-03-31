@@ -13,9 +13,9 @@ export async function POST(req) {
     const calculateSessions = () => {
         let totalRequired = 0;
         syllabus.forEach(item => {
-          const hLt = (parseFloat(item.gioLT) || 0) + (parseFloat(item.gioKLT) || 0) + (parseFloat(item.gioTLT) || 0);
-          const hTh = (parseFloat(item.gioTH) || 0) + (parseFloat(item.gioKTH) || 0) + (parseFloat(item.gioTTH) || 0);
-          totalRequired += hLt + (hTh * 4 / 3);
+          const hLt = parseFloat(item.gioLT) || 0;
+          const others = (parseFloat(item.gioTH) || 0) + (parseFloat(item.gioKLT) || 0) + (parseFloat(item.gioKTH) || 0) + (parseFloat(item.gioTLT) || 0) + (parseFloat(item.gioTTH) || 0);
+          totalRequired += hLt + (others * 60 / 45);
         });
         const totalPeriodsNeeded = Math.ceil(totalRequired);
         let sessions = [], dateBase = String(startDate);

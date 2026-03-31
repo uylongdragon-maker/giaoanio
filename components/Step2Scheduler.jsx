@@ -31,7 +31,11 @@ export default function Step2Scheduler() {
 
   // Preview dates (assume a default of 30 periods for preview if syllabus is empty)
   const totalRequired = activeCourse.syllabus?.length > 0 
-    ? activeCourse.syllabus.reduce((sum, l) => sum + (parseFloat(l.gioLT) || 0) + (Math.round((parseFloat(l.gioTH) || 0) * 60 / 45)), 0)
+    ? activeCourse.syllabus.reduce((sum, l) => {
+        const lt = parseFloat(l.gioLT) || 0;
+        const others = (parseFloat(l.gioTH) || 0) + (parseFloat(l.gioKLT) || 0) + (parseFloat(l.gioKTH) || 0) + (parseFloat(l.gioTLT) || 0) + (parseFloat(l.gioTTH) || 0);
+        return sum + lt + Math.round(others * 60 / 45);
+      }, 0)
     : 30;
 
   const previewDates = getActualTeachingDates(

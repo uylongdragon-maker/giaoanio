@@ -18,34 +18,26 @@ export default function Step4Editor() {
   };
 
   // Calculate total periods from syllabus
-  const totalLT = activeCourse.syllabus.reduce((sum, l) => sum + (parseFloat(l.gioLT) || 0) + (parseFloat(l.gioKLT) || 0) + (parseFloat(l.gioTLT) || 0), 0);
-  const totalTH = activeCourse.syllabus.reduce((sum, l) => sum + (parseFloat(l.gioTH) || 0) + (parseFloat(l.gioKTH) || 0) + (parseFloat(l.gioTTH) || 0), 0);
-  const totalPeriods = totalLT + Math.round(totalTH * 60 / 45);
+  const totalLT = activeCourse.syllabus.reduce((sum, l) => sum + (parseFloat(l.gioLT) || 0), 0);
+  const totalOther = activeCourse.syllabus.reduce((sum, l) => sum + 
+    (parseFloat(l.gioTH) || 0) + 
+    (parseFloat(l.gioKLT) || 0) + 
+    (parseFloat(l.gioKTH) || 0) + 
+    (parseFloat(l.gioTLT) || 0) + 
+    (parseFloat(l.gioTTH) || 0), 0);
+    
+  const totalPeriods = totalLT + Math.round(totalOther * 60 / 45);
 
   // Calculate total capacity from Step 2
   const totalCapacity = Object.entries(activeCourse.dayConfigs).reduce((sum, [day, periods]) => {
-     // This is just a rough check. For a more accurate check, we'd need to know how many of each day are in the schedule.
-     // But essentially we want to compare with the total periods predicted in Step 2 preview.
      return sum; // Placeholder
   }, 0);
 
-  // Use the getActualTeachingDates result to get accurate capacity
-  const actualDates = activeCourse.startDate ? (
-    // We don't have a fixed "end" but we can estimate based on number of sessions if they were generated.
-    // However, the best way is to see if totalPeriods > sum of pLimit in all sessions that would be generated.
-    []
-  ) : [];
+  const actualDates = activeCourse.startDate ? [] : [];
 
-  // Simplified warning: Compare current syllabus total with what was planned
   const plannedPeriods = activeCourse.schedule?.length > 0
     ? activeCourse.schedule.reduce((sum, s) => sum + s.totalPeriods, 0)
     : 0; 
-    // If schedule hasn't been generated yet, we use the preview logic from step 2
-    // totalRequired in Step 2 was based on syllabus, so it's a bit circular.
-    // The requirement says: "Cảnh báo: Tổng số tiết/phút nhập vào bảng này phải khớp với tổng số buổi đã cấu hình ở Bước 2."
-    // Let's assume we want to match the "Daily config" total over a reasonable semester.
-    // Or better: Step 2 allows "4 tiết/Thứ 2", "4 tiết/Thứ 4".
-    // Let's just compare the current syllabus total with a warning if it seems too high/low.
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-10 animate-in fade-in slide-in-from-bottom-4">
@@ -73,8 +65,8 @@ export default function Step4Editor() {
         <div>
           <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest mb-1">Cảnh báo hệ thống</p>
           <p className="text-sm font-bold text-slate-300 leading-relaxed">
-            Tổng thời lượng hiện tại: <span className="text-white font-black">{totalPeriods} Tiết</span> ({totalLT}h LT + {totalTH}h TH). 
-            Hãy đảm bảo số tiết này khớp với kế hoạch giảng dạy trong học kỳ của bạn để tránh sai lệch khi AI phân bổ vào lịch.
+            Tổng thời lượng hiện tại: <span className="text-white font-black">{totalPeriods} Tiết</span> ({totalLT}h LT + {totalOther}h TH/KT/Thi). 
+            Hãy đảm bảo số tiết quy đổi đã khớp với kế hoạch giảng dạy trong học kỳ.
           </p>
         </div>
       </div>

@@ -42,15 +42,20 @@ export default function SyllabusPreviewTable({ lessons, onConfirm, onCancel, onC
     if (onChange) onChange(updated);
   };
 
-  // Tổng LT bao gồm cả Kiểm tra LT và Thi LT
-  const totalLT = localLessons.reduce((sum, l) => sum + (parseFloat(l.gioLT) || 0) + (parseFloat(l.gioKLT) || 0) + (parseFloat(l.gioTLT) || 0), 0);
+  // Chỉ có Lý thuyết (LT) là hệ số 1 (45 phút)
+  const totalLT = localLessons.reduce((sum, l) => sum + (parseFloat(l.gioLT) || 0), 0);
   
-  // Tổng TH bao gồm cả Kiểm tra TH và Thi TH
-  const totalTH = localLessons.reduce((sum, l) => sum + (parseFloat(l.gioTH) || 0) + (parseFloat(l.gioKTH) || 0) + (parseFloat(l.gioTTH) || 0), 0);
+  // Thực hành, Kiểm tra, Thi (TH, KLT, KTH, TLT, TTH) đều là hệ số 60/45 (60 phút)
+  const totalOther = localLessons.reduce((sum, l) => sum + 
+    (parseFloat(l.gioTH) || 0) + 
+    (parseFloat(l.gioKLT) || 0) + 
+    (parseFloat(l.gioKTH) || 0) + 
+    (parseFloat(l.gioTLT) || 0) + 
+    (parseFloat(l.gioTTH) || 0), 0);
   
-  // Quy đổi TH theo hệ số 60/45 (1.33)
-  const totalTHConverted = totalTH * (60 / 45);
-  const totalPeriods = totalLT + totalTHConverted;
+  // Quy đổi theo hệ số 60/45 (1.3333)
+  const totalOtherConverted = totalOther * (60 / 45);
+  const totalPeriods = totalLT + totalOtherConverted;
 
   const handleExportWord = () => {
     setIsExporting(true);
@@ -112,13 +117,13 @@ export default function SyllabusPreviewTable({ lessons, onConfirm, onCancel, onC
           </tbody>
           <tfoot>
             <tr style="font-weight: bold; background-color: #f9f9f9;">
-              <td colspan="3" align="right">TỔNG CỘNG HỆ SỐ 1.0:</td>
-              <td align="center" colspan="2">${(totalLT + totalTH).toFixed(1)} h</td>
+              <td colspan="3" align="right">TỔNG CỘNG HỆ SỐ 1.0 (Giờ):</td>
+              <td align="center" colspan="2">${(totalLT + totalOther).toFixed(1)} h</td>
               <td align="center" colspan="2">${(localLessons.reduce((s,l)=>s+(parseFloat(l.gioKLT)||0)+(parseFloat(l.gioKTH)||0), 0)).toFixed(1)} h</td>
               <td align="center" colspan="2">${(localLessons.reduce((s,l)=>s+(parseFloat(l.gioTLT)||0)+(parseFloat(l.gioTTH)||0), 0)).toFixed(1)} h</td>
             </tr>
             <tr style="font-weight: bold; color: #4f46e5;">
-              <td colspan="7" align="right">QUY ĐỔI TỔNG TIẾT (LT + TH*1.33):</td>
+              <td colspan="7" align="right">QUY ĐỔI TỔNG TIẾT (LT + Khác*1.33):</td>
               <td align="center" colspan="2">${Math.round(totalPeriods)} TIẾT</td>
             </tr>
           </tfoot>
@@ -349,7 +354,7 @@ export default function SyllabusPreviewTable({ lessons, onConfirm, onCancel, onC
               <CheckCircle2 className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-[10px] uppercase font-black tracking-widest text-indigo-100">Dự kiến Thời lượng môn</p>
+              <p className="text-[10px] uppercase font-black tracking-widest text-indigo-100">Quy đổi hệ số (1.33)</p>
               <p className="text-xl font-black text-white">{Math.round(totalPeriods)} Tiết</p>
             </div>
           </div>
