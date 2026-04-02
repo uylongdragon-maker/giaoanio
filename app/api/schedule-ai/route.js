@@ -46,7 +46,7 @@ export async function POST(req) {
     const targetSessions = calculateSessionsMeta();
     
     const result = await generateObject({
-      model: googleProvider('gemini-1.5-flash'),
+      model: googleProvider('gemini-2.5-flash'),
       schema: z.object({
         sessions: z.array(z.object({
           sessionTitle: z.string(),
