@@ -36,10 +36,8 @@ export async function POST(req) {
     let requestedModel = (modelId || modelType || 'gemini-1.5-flash').toLowerCase().trim();
     if (requestedModel.startsWith('models/')) requestedModel = requestedModel.replace('models/', '');
     
-    // Normalize model for AI SDK (Ưu tiên 2.5-flash vì có quota 5 RPM)
-    const modelName = requestedModel.includes('2.0') ? 'gemini-2.5-flash' : 
-                      requestedModel.includes('2.5') ? 'gemini-2.5-flash' : 
-                      requestedModel.includes('1.5-pro') ? 'gemini-1.5-pro-002' : 'gemini-1.5-flash-002';
+    // Normalize model for AI SDK (ÉP DÙNG 1.5-FLASH ĐỂ CÓ QUOTA RỘNG)
+    const modelName = 'gemini-1.5-flash';
 
     if (!apiKey && !process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
       return NextResponse.json({ error: "Thiếu Gemini API Key từ Client (BYOK) hoặc Server (Env)." }, { status: 401 });

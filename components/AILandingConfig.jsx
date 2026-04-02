@@ -1,16 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { Settings, Eye, EyeOff, CheckCircle, ChevronDown, KeyRound, Sparkles, Wand2 } from 'lucide-react';
+import { Settings, Eye, EyeOff, CheckCircle, ChevronDown, KeyRound, Sparkles, Wand2, Zap, Brain } from 'lucide-react';
 
 const MODELS = [
-  { id: 'gemini-2.0-flash',         modelId: 'gemini-2.0-flash',           label: 'Google Gemini 2.0 Flash (🚀 Tối ưu)',        icon: '🚀', provider: 'gemini' },
-  { id: 'gemini-1.5-flash-002',     modelId: 'gemini-1.5-flash-002',       label: 'Gemini 1.5 Flash-002 (⚡ Ổn định)',    icon: '⚡', provider: 'gemini' },
-  { id: 'gemini-1.5-pro-002',       modelId: 'gemini-1.5-pro-002',         label: 'Gemini 1.5 Pro-002 (🧠 Chi tiết)',     icon: '🧠', provider: 'gemini' },
+  { id: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash (⚡ Gợi ý)', icon: '⚡', provider: 'gemini' },
+  { id: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro (🧠 Chi tiết)', icon: '🧠', provider: 'gemini' },
 ];
 
 export default function AILandingConfig({ onComplete }) {
-  const [modelType, setModelType] = useState('gemini-2.0-flash');
+  const [modelType, setModelType] = useState('gemini-1.5-flash');
   const [apiKey, setApiKey] = useState('');
   const [showKey, setShowKey] = useState(false);
   const [isModelOpen, setIsModelOpen] = useState(false);

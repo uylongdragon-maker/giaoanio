@@ -14,9 +14,8 @@ import SchedulingForm from '@/components/SchedulingForm';
 import { generateTimetable } from '@/app/utils/scheduler';
 
 const MODELS = [
-  { id: 'gemini-2.0-flash',         modelId: 'gemini-2.0-flash',           label: 'Gemini 2.0 Flash (🚀 Tối ưu)',        icon: '🚀' },
-  { id: 'gemini-1.5-flash-002',     modelId: 'gemini-1.5-flash-002',       label: 'Gemini 1.5 Flash-002 (⚡ Ổn định)',    icon: '⚡' },
-  { id: 'gemini-1.5-pro-002',       modelId: 'gemini-1.5-pro-002',         label: 'Gemini 1.5 Pro-002 (🧠 Chi tiết)',     icon: '🤖' },
+  { id: 'gemini-1.5-flash', modelId: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash (⚡ Gợi ý)', icon: '⚡' },
+  { id: 'gemini-1.5-pro',   modelId: 'gemini-1.5-pro',   label: 'Gemini 1.5 Pro (🧠 Chi tiết)',     icon: '🧠' },
 ];
 
 export default function CourseWizard({ onComplete }) {
@@ -30,7 +29,7 @@ export default function CourseWizard({ onComplete }) {
   const [courseName, setCourseName] = useState('');
   const [syllabus, setSyllabus] = useState([]);
   const [scheduleConfig, setScheduleConfig] = useState(null);
-  const [modelType, setModelType] = useState('gemini-2.0-flash');
+  const [modelType, setModelType] = useState('gemini-1.5-flash');
   const [finalSchedule, setFinalSchedule] = useState(null);
 
   useEffect(() => {

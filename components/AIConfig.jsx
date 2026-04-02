@@ -33,12 +33,13 @@ export default function AIConfig({ onConfigSaved }) {
                          modelType.includes('exp') ||
                          modelType === 'gemini-1.5-flash' || 
                          modelType === 'gemini-1.5-pro' ||
+                         modelType === 'gemini-2.0-flash' ||
                          modelType === 'gemini-3.0-flash-preview' ||
                          modelType === 'gemini-3.1-pro-preview';
         
         if (isLegacy || !MODELS.find(m => m.id === modelType)) {
-          console.warn("[Migration] Detecting legacy model:", modelType, "Redirecting to gemini-2.0-flash");
-          config.modelType = 'gemini-2.0-flash';
+          console.warn("[Migration] Detecting legacy model:", modelType, "Redirecting to gemini-1.5-flash-002");
+          config.modelType = 'gemini-1.5-flash-002';
           localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
         }
 
