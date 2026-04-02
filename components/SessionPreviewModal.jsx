@@ -1,5 +1,18 @@
 import { useState, useEffect } from 'react';
-import { X, FileText, Download, CheckCircle2, Calendar, Clock, BookOpen, Bot, Plus, Loader2, RefreshCw } from 'lucide-react';
+import { X, FileText, Download, CheckCircle2, Calendar, Clock, BookOpen, Bot, Plus, Loader2, RefreshCw, Scale, Zap } from 'lucide-react';
+
+const normalizeTime = (rows, target) => {
+  const currentTotal = rows.reduce((sum, r) => sum + (Number(r.phut) || 0), 0);
+  if (currentTotal === 0 || currentTotal === target) return rows;
+  const ratio = target / currentTotal;
+  let runningTotal = 0;
+  return rows.map((r, i) => {
+    if (i === rows.length - 1) return { ...r, phut: target - runningTotal };
+    const newPhut = Math.round((Number(r.phut) || 0) * ratio);
+    runningTotal += newPhut;
+    return { ...r, phut: newPhut };
+  });
+};
 
 export default function SessionPreviewModal({ isOpen, onClose, session, onReset, onSave, onGenerateAI, isGenerating: isGeneratingProp }) {
   const [editedObjective, setEditedObjective] = useState('');
@@ -66,6 +79,11 @@ export default function SessionPreviewModal({ isOpen, onClose, session, onReset,
         setGenerating(false);
       }
     }
+  };
+
+  const handleNormalize = () => {
+    const target = (Number(session?.totalPeriods) || 4) * 45;
+    setEditedActivities(normalizeTime(editedActivities, target));
   };
 
   const handleSave = () => {
@@ -181,7 +199,7 @@ export default function SessionPreviewModal({ isOpen, onClose, session, onReset,
             </div>
             <div className="flex items-center gap-3">
               <h2 className="text-2xl font-black text-slate-900 tracking-tight leading-tight uppercase">
-                {session.sessionTitle || Array.from(new Set(session.contents.map(c => c.lessonName))).join(' & ')}
+                {session.sessionTitle || Array.from(new Set(session.contents.map(c => c.lessonName).filter(Boolean))).join(' & ')}
               </h2>
               <span className={`text-[10px] font-black uppercase px-3 py-1 rounded-full border shadow-sm ${
                 lessonType?.normalize('NFC') === 'Tích hợp'.normalize('NFC') ? 'bg-indigo-600 text-white border-indigo-600' :
@@ -197,7 +215,7 @@ export default function SessionPreviewModal({ isOpen, onClose, session, onReset,
               <div className="flex items-center gap-2 mt-2">
                  <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Bao gồm:</span>
                  <p className="text-[10px] font-bold text-slate-500">
-                   {Array.from(new Set(session.contents.map(c => c.lessonName))).join(', ')}
+                   {Array.from(new Set(session.contents.map(c => c.lessonName).filter(Boolean))).join(', ')}
                  </p>
               </div>
             )}
@@ -444,12 +462,20 @@ export default function SessionPreviewModal({ isOpen, onClose, session, onReset,
              </div>
           </div>
           <div className="flex items-center gap-3 w-full md:w-auto">
+            {totalMinutes !== targetMinutes && (
+              <button 
+                onClick={handleNormalize}
+                className="px-5 py-3 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl flex items-center gap-2 transition-all active:scale-95 text-xs shadow-lg shadow-amber-200 animate-pulse"
+              >
+                <Scale className="w-4 h-4" /> CÂN BẰNG THỜI GIAN
+              </button>
+            )}
             <button 
               onClick={() => onReset && onReset(session.id)}
               disabled={generating}
-              className="px-5 py-3 bg-white hover:bg-rose-50 disabled:opacity-50 text-rose-500 font-bold rounded-xl border border-slate-200 hover:border-rose-200 flex items-center gap-2 transition-all active:scale-95 text-xs"
+              className="px-5 py-3 bg-white hover:bg-rose-50 disabled:opacity-50 text-slate-400 hover:text-rose-600 font-bold rounded-xl border border-slate-200 hover:border-rose-200 flex items-center gap-2 transition-all active:scale-95 text-xs"
             >
-              <RefreshCw className="w-4 h-4" /> LÀM MỚI
+              <RefreshCw className="w-4 h-4" /> HỦY & SOẠN LẠI
             </button>
             <button 
               onClick={handleExportWord}

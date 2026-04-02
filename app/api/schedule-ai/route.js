@@ -1,4 +1,5 @@
-import { google } from '@ai-sdk/google';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import { NextResponse } from 'next/server';
 import { generateObject } from 'ai';
 import { z } from 'zod';
 
@@ -16,7 +17,7 @@ export async function POST(req) {
       modelId 
     } = body;
 
-    const googleProvider = google({
+    const googleProvider = createGoogleGenerativeAI({
       apiKey: (apiKey || process.env.GOOGLE_GENERATIVE_AI_API_KEY || "").trim(),
     });
 
@@ -68,10 +69,10 @@ export async function POST(req) {
       ...result.object.sessions[idx]
     }));
 
-    return Response.json({ sessions: finalSessions });
+    return NextResponse.json({ sessions: finalSessions });
 
   } catch (error) {
     console.error("LỖI API SCHEDULE:", error.message);
-    return Response.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

@@ -38,13 +38,13 @@ export default function Step5Execution({ aiConfig }) {
     schema: LessonSchema,
     onFinish: ({ object: finalObject }) => {
       if (currentSessionId && finalObject?.lessonRows) {
-        // TỰ ĐỘNG CHUẨN HÓA THỜI GIAN (VD: 180 PHÚT)
+        // TỰ ĐỘNG CHUẨN HÓA THỜI GIAN (180 PHÚT/BUỔI) - THUẬT TOÁN SUPREME NORMALIZATION
         const targetTotal = (Number(activeCourse.schedule.find(s => s.id === currentSessionId)?.totalPeriods) || 4) * 45;
         const aiTotal = finalObject.lessonRows.reduce((sum, row) => sum + (Number(row.phut) || 0), 0);
         
         let normalizedRows = [...finalObject.lessonRows];
         if (aiTotal > 0 && aiTotal !== targetTotal) {
-          console.log(`NORMALIZING: AI ${aiTotal}m -> Target ${targetTotal}m`);
+          console.log(`SUPREME NORMALIZING: AI ${aiTotal}m -> Target ${targetTotal}m`);
           const ratio = targetTotal / aiTotal;
           let currentRunningTotal = 0;
           
@@ -259,12 +259,13 @@ YÊU CẦU: Tạo lịch buổi học (4 tiết/buổi). Trả về JSON ARRAY: 
         setFinalLessonData(null); // Reset before new stream
 
         // STREAMING VIA SDK
+        const uniqueLessonNames = Array.from(new Set(sessionParam.contents.map(c => c.lessonName).filter(Boolean)));
         submit({
           apiKey: userKey,
           modelType,
           mode: 'lesson_json',
           formData: {
-            lessonName: sessionParam.contents.map(c => c.lessonName).join(' & '),
+            lessonName: uniqueLessonNames.join(' & '),
             topics: sessionParam.contents.map(c => c.subItem),
             totalMinutes: (Number(sessionParam.totalPeriods) || 0) * 45,
             notes: (activeCourse.courseContext || "") + `\n\n[MẪU GIÁO ÁN ${finalType.toUpperCase()} RIÊNG BIỆT]:\n` + template,
