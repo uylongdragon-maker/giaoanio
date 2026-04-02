@@ -67,7 +67,7 @@ export default function InteractiveLessonBuilder({ sessionData, courseData, onCo
       showToast("Đang bóc tách khung sườn (Skeleton) bằng AI...", "info");
       
       // NEW: Call AI to extract skeleton
-      const skeletonRes = await fetch('/api/generate', {
+      const skeletonRes = await fetch('/api/generate-lesson', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -199,7 +199,7 @@ NHIỆM VỤ:
 3. Nội dung phải bám sát đề mục: ${sessionData.topics || 'Không có'}.
 4. Trả về mã HTML hoàn chỉnh khớp với khung sườn.`;
 
-      const res = await fetch('/api/generate', {
+      const res = await fetch('/api/generate-lesson', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

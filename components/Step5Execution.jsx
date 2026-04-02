@@ -4,6 +4,22 @@ import { useState, useRef, useEffect } from 'react';
 import { Play, Download, RefreshCw, Loader2, CheckCircle2, Zap, Layout, Calendar, FileText, ArrowLeft, X, Clock, UploadCloud, BookOpen, LogOut } from 'lucide-react';
 import useStore from '@/app/store/useStore';
 import SessionPreviewModal from '@/components/SessionPreviewModal';
+import { experimental_useObject as useObject } from '@ai-sdk/react';
+import { z } from 'zod';
+
+const LessonRowSchema = z.object({
+  segmentTitle: z.string(),
+  phut: z.number(),
+  noi_dung: z.string(),
+  teacherAct: z.string(),
+  studentAct: z.string(),
+  ghi_chu: z.string().optional(),
+});
+
+const LessonSchema = z.object({
+  muc_tieu: z.string(),
+  lessonRows: z.array(LessonRowSchema),
+});
 
 export default function Step5Execution({ aiConfig }) {
   const { activeCourse, updateActiveCourse, resetWorkflow, prevStep } = useStore();
@@ -13,6 +29,74 @@ export default function Step5Execution({ aiConfig }) {
   const [error, setError] = useState('');
   const [previewSession, setPreviewSession] = useState(null);
   const templateInputRef = useRef(null);
+  const [currentSessionId, setCurrentSessionId] = useState(null);
+  const [currentFinalType, setCurrentFinalType] = useState('');
+  const [finalLessonData, setFinalLessonData] = useState(null);
+
+  const { object, submit, isLoading: isStreaming, error: streamingError } = useObject({
+    api: '/api/generate-lesson',
+    schema: LessonSchema,
+    onFinish: ({ object: finalObject }) => {
+      if (currentSessionId && finalObject?.lessonRows) {
+        // TỰ ĐỘNG CHUẨN HÓA THỜI GIAN (VD: 180 PHÚT)
+        const targetTotal = (Number(activeCourse.schedule.find(s => s.id === currentSessionId)?.totalPeriods) || 4) * 45;
+        const aiTotal = finalObject.lessonRows.reduce((sum, row) => sum + (Number(row.phut) || 0), 0);
+        
+        let normalizedRows = [...finalObject.lessonRows];
+        if (aiTotal > 0 && aiTotal !== targetTotal) {
+          console.log(`NORMALIZING: AI ${aiTotal}m -> Target ${targetTotal}m`);
+          const ratio = targetTotal / aiTotal;
+          let currentRunningTotal = 0;
+          
+          normalizedRows = normalizedRows.map((row, index) => {
+            if (index === normalizedRows.length - 1) {
+               return { ...row, phut: targetTotal - currentRunningTotal };
+            }
+            const newPhut = Math.round((Number(row.phut) || 0) * ratio);
+            currentRunningTotal += newPhut;
+            return { ...row, phut: newPhut };
+          });
+        }
+
+        const finalData = {
+          muc_tieu: finalObject.muc_tieu,
+          lessonRows: normalizedRows,
+          lessonType: currentFinalType
+        };
+
+        setFinalLessonData(finalData);
+        
+        const updatedSchedule = activeCourse.schedule.map(s => 
+          s.id === currentSessionId ? { ...s, generatedLesson: finalData, status: 'completed', lessonType: currentFinalType } : s
+        );
+        updateActiveCourse({ schedule: updatedSchedule });
+        
+        if (previewSession?.id === currentSessionId) {
+          setPreviewSession(prev => ({
+            ...prev,
+            generatedLesson: finalData,
+            status: 'completed',
+            lessonType: currentFinalType
+          }));
+        }
+      }
+    },
+    onError: (err) => {
+      // handled in useEffect below
+    }
+  });
+
+  useEffect(() => {
+    if (streamingError) {
+      console.error("Streaming AI Error:", streamingError);
+      const msg = streamingError.message.toLowerCase();
+      if (msg.includes('429') || msg.includes('quota') || msg.includes('exhausted')) {
+        alert("🚨 GIỚI HẠN QUOTA: API Key của bạn đã vượt quá lượt dùng miễn phí của Google (thường là 15 lần/phút). Vui lòng đợi 1 phút rồi thử lại, hoặc đổi Key khác trong phần Cấu hình!");
+      } else {
+        setError("Lỗi kết nối AI: " + streamingError.message);
+      }
+    }
+  }, [streamingError]);
 
   const handleTemplateUpload = async (file) => {
     if (!file) return;
@@ -31,7 +115,9 @@ export default function Step5Execution({ aiConfig }) {
           reader.readAsDataURL(file);
         });
         const base64Data = await base64Promise;
-        const res = await fetch('/api/generate', {
+        // Client-side AbortController removed
+
+        const res = await fetch('/api/generate-lesson', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -41,6 +127,8 @@ export default function Step5Execution({ aiConfig }) {
             fileData: { mimeType: file.type, data: base64Data }
           })
         });
+
+        // No timeout clearance needed
         const data = await res.json();
         rawText = data.text || data.summary || "";
       }
@@ -58,24 +146,61 @@ export default function Step5Execution({ aiConfig }) {
   const handleGenerateSchedule = async () => {
     setLoading(true);
     setError('');
+    const runChromeAISchedule = async () => {
+      if (!window.ai?.languageModel) {
+        throw new Error("Chrome Built-in AI chưa được kích hoạt. Vui lòng bật cờ 'Built-in AI' trong chrome://flags.");
+      }
+      const session = await window.ai.languageModel.create();
+      const prompt = `HÃY LÀ CHUYÊN GIA LẬP LỊCH GIÁO DỤC.
+DỮ LIỆU: ${JSON.stringify({
+        syllabus: activeCourse.syllabus,
+        startDate: activeCourse.startDate,
+        dayConfigs: activeCourse.dayConfigs,
+        holidays: activeCourse.holidayList
+      })}
+YÊU CẦU: Tạo lịch buổi học (4 tiết/buổi). Trả về JSON ARRAY: [{ "id": string, "date": "YYYY-MM-DD", "sessionTitle": string, "totalPeriods": number, "contents": [{ "subItem": string, "gioLT_used": number, "gioTH_used": number }] }]`;
+      const result = await session.prompt(prompt);
+      const jsonMatch = result.match(/\[[\s\S]*\]/);
+      return JSON.parse(jsonMatch ? jsonMatch[0] : result);
+    };
+
     try {
-      const res = await fetch('/api/schedule-ai', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          syllabus: activeCourse.syllabus,
-          startDate: activeCourse.startDate,
-          dayConfigs: activeCourse.dayConfigs,
-          holidayList: activeCourse.holidayList,
-          apiKey: aiConfig?.apiKey,
-          modelId: aiConfig?.modelType || aiConfig?.model || 'gemini-1.5-pro'
-        })
-      });
+      const modelId = aiConfig?.modelType || aiConfig?.model || 'gemini-1.5-flash-002';
+      
+      if (modelId === 'chrome-nano') {
+        const sessions = await runChromeAISchedule();
+        updateActiveCourse({ schedule: sessions });
+        return;
+      }
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Lỗi xếp lịch AI');
+       const res = await fetch('/api/schedule-ai', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({
+           syllabus: activeCourse.syllabus,
+           startDate: activeCourse.startDate,
+           dayConfigs: activeCourse.dayConfigs,
+           holidayList: activeCourse.holidayList,
+           apiKey: aiConfig?.apiKey,
+           modelId,
+         })
+       });
+ 
 
-      updateActiveCourse({ schedule: data.sessions });
+      if (!res.ok) {
+        const data = await res.json();
+        const msg = data.error || '';
+        if (msg.includes('CẠN KIỆT AI') && window.ai?.languageModel) {
+           console.log("ULTIMATE FALLBACK (SCHEDULER): API failed. Trying Chrome Nano...");
+           const sessions = await runChromeAISchedule();
+           updateActiveCourse({ schedule: sessions });
+        } else {
+           throw new Error(msg || 'Lỗi xếp lịch AI');
+        }
+      } else {
+        const data = await res.json();
+        updateActiveCourse({ schedule: data.sessions });
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -106,62 +231,54 @@ export default function Step5Execution({ aiConfig }) {
       
       const template = (activeCourse.lessonTemplates || {})[typeKey] || "";
 
-      const res = await fetch('/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          apiKey: aiConfig?.apiKey,
-          modelType: aiConfig?.modelType || aiConfig?.model,
+      setCurrentSessionId(sessionParam.id);
+      setCurrentFinalType(finalType);
+      const modelType = aiConfig?.modelType || aiConfig?.model;
+
+      if (modelType === 'chrome-nano') {
+        const data = await runChromeAI();
+        const updatedSchedule = activeCourse.schedule.map(s => 
+          s.id === sessionParam.id ? { ...s, generatedLesson: data, status: 'completed', lessonType: finalType } : s
+        );
+        updateActiveCourse({ schedule: updatedSchedule });
+        setPreviewSession({ 
+          ...sessionParam, 
+          generatedLesson: data, 
+          status: 'completed', 
+          lessonType: finalType 
+        });
+      } else {
+        // Validation: Check for API Key
+        const userKey = aiConfig?.apiKey;
+        if (!userKey) {
+          alert("Vui lòng nhập API Key của Google Gemini trong phần 'Cấu hình AI' trước khi soạn!");
+          setLoading(false);
+          return;
+        }
+
+        setFinalLessonData(null); // Reset before new stream
+
+        // STREAMING VIA SDK
+        submit({
+          apiKey: userKey,
+          modelType,
           mode: 'lesson_json',
           formData: {
             lessonName: sessionParam.contents.map(c => c.lessonName).join(' & '),
             topics: sessionParam.contents.map(c => c.subItem),
-            totalMinutes: sessionParam.totalPeriods * 45,
+            totalMinutes: (Number(sessionParam.totalPeriods) || 0) * 45,
             notes: (activeCourse.courseContext || "") + `\n\n[MẪU GIÁO ÁN ${finalType.toUpperCase()} RIÊNG BIỆT]:\n` + template,
             lessonType: finalType
           },
           systemPrompt: `BẠN LÀ CHUYÊN GIA BIÊN SOẠN GIÁO ÁN SƯ PHẠM ĐẲNG CẤP.
-Nhiệm vụ: Soạn giáo án CHI TIẾT loại ${finalType.toUpperCase()} dựa trên ĐỀ CƯƠNG và [MẪU GIÁO ÁN].
-
-DỮ LIỆU ĐỀ CƯƠNG:
-- Tên bài: ${sessionParam.contents.map(c => c.lessonName).join(' & ')}
-- Các tiểu mục/hoạt động: ${sessionParam.contents.map(c => c.subItem).join(', ')}
-
-YÊU CẦU NGHIÊM NGẶT:
-1. BÁM SÁT ĐỀ CƯƠNG: Sử dụng chính xác các tiểu mục trong đề cương làm tiêu đề hoặc nội dung cốt lõi của hoạt động.
-2. QUY TẮC 15 PHÚT: KHÔNG ĐƯỢC PHÂN BỔ BẤT KỲ HOẠT ĐỘNG NÀO VƯỢT QUÁ 15 PHÚT. Nếu một mục tiêu bài giảng cần nhiều thời gian hơn, hãy chia nhỏ nó thành nhiều phần (VD: Phần 1, Phần 2...).
-3. TỔNG THỜI LƯỢNG: Tổng cột 'phut' PHẢI BẰNG ĐÚNG ${sessionParam.totalPeriods * 45} phút.
-4. CẤU TRÚC JSON (4 CỘT):
-   - "segmentTitle": Tiêu đề hoạt động (VD: "Ổn định lớp", "1.1. Máy ảnh là gì?").
-   - "phut": Thời gian (Số nguyên).
-   - "noi_dung": Tóm tắt nội dung kiến thức.
-   - "teacherAct": Hoạt động CHI TIẾT của Giáo viên (Dùng số thứ tự 1, 2, 3...).
-   - "studentAct": Hoạt động CHI TIẾT của Học sinh (Dùng số thứ tự 1, 2, 3...).
-   - "ghi_chu": Ghi chú.
-5. TRÌNH BÀY: TRONG CÁC Ô teacherAct VÀ studentAct, PHẢI CHỈ RÕ CÁC BƯỚC BẰNG SỐ THỨ TỰ 1, 2, 3... ĐỂ TĂNG TÍNH KHOA HỌC.
-CHỈ TRẢ VỀ JSON DUY NHẤT, KHÔNG GIẢI THÍCH.`
-        })
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Lỗi soạn giáo án chi tiết');
-
-      const updatedSchedule = activeCourse.schedule.map(s => 
-        s.id === sessionParam.id ? { ...s, generatedLesson: data, status: 'completed', lessonType: finalType } : s
-      );
-      
-      updateActiveCourse({ schedule: updatedSchedule });
-      setPreviewSession({ 
-        ...sessionParam, 
-        generatedLesson: data, 
-        status: 'completed', 
-        lessonType: finalType 
-      });
-      
+            Nhiệm vụ: Soạn giáo án CHI TIẾT loại ${finalType.toUpperCase()} dựa trên ĐỀ CƯƠNG và [MẪU GIÁO ÁN].
+            CHỈ TRẢ VỀ JSON DUY NHẤT THEO SCHEMA, KHÔNG GIẢI THÍCH.`
+        });
+      }
     } catch (err) {
       console.error("AI Generation Error:", err);
       setError("AI Generation Error: " + err.message);
-      throw err; // Re-throw so the Modal can catch and show it
+      throw err; 
     } finally {
       setLoading(false);
     }
@@ -190,8 +307,8 @@ CHỈ TRẢ VỀ JSON DUY NHẤT, KHÔNG GIẢI THÍCH.`
   const handleSessionClick = (session) => {
     if (session.status === 'pending') {
       const emptyLesson = {
-        objectives: "",
-        activities: Array(12).fill(null).map((_, i) => ({
+        muc_tieu: "",
+        lessonRows: Array(12).fill(null).map((_, i) => ({
           segmentTitle: i === 0 ? "Ổn định lớp" : i === 1 ? "Kiểm tra bài cũ" : `Nội dung mới (Mục ${i-1})`,
           phut: i === 0 ? 5 : i === 1 ? 10 : 15,
           noi_dung: "",
@@ -311,8 +428,17 @@ CHỈ TRẢ VỀ JSON DUY NHẤT, KHÔNG GIẢI THÍCH.`
                disabled={loading}
                className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-black px-12 py-6 rounded-3xl shadow-[0_20px_50px_rgba(79,70,229,0.3)] transition-all active:scale-95 flex items-center gap-4 mx-auto text-xl"
              >
-               {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : <Play className="w-7 h-7" />}
-               BẮT ĐẦU SOẠN
+                {loading ? (
+                  <div className="flex flex-col items-center gap-2">
+                    <Loader2 className="w-10 h-10 animate-spin" />
+                    <span className="text-sm font-bold opacity-80 italic">Đang phân bổ dữ liệu giáo án 180 phút... Có thể mất 1-2 phút, thầy cô kiên nhẫn nhé!</span>
+                  </div>
+                ) : (
+                  <>
+                    <Play className="w-7 h-7" />
+                    <span>BẮT ĐẦU SOẠN</span>
+                  </>
+                )}
              </button>
           </div>
         </div>
@@ -437,10 +563,17 @@ CHỈ TRẢ VỀ JSON DUY NHẤT, KHÔNG GIẢI THÍCH.`
         <SessionPreviewModal 
           isOpen={!!previewSession}
           onClose={() => setPreviewSession(null)}
-          session={previewSession}
+          session={
+            isStreaming && currentSessionId === previewSession.id && object
+              ? { ...previewSession, generatedLesson: { lessonRows: object.lessonRows, muc_tieu: object.muc_tieu }, status: 'generating' }
+              : (finalLessonData && currentSessionId === previewSession.id)
+                ? { ...previewSession, generatedLesson: finalLessonData, status: 'completed' }
+                : previewSession
+          }
           onReset={handleResetSession}
           onSave={handleSaveLesson}
           onGenerateAI={(s) => handleGenerateDetailedLesson(s)}
+          isGenerating={isStreaming && currentSessionId === previewSession.id}
         />
       )}
 

@@ -23,7 +23,7 @@ export default function SimulationBox({ apiKey, modelType, lessonData, onApplySi
     setVisualHtml(null);
 
     try {
-      const res = await fetch('/api/generate', {
+      const res = await fetch('/api/generate-lesson', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

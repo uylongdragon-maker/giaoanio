@@ -44,7 +44,25 @@ export default function AssistantChat({ lessonData, apiKey, modelType, onChatUpd
     setInput('');
     setIsTyping(true);
 
+    const runChromeAIChat = async (msg, hist) => {
+      if (!window.ai?.languageModel) {
+        throw new Error("Chrome Built-in AI chưa được kích hoạt. Vui lòng bật cờ 'Built-in AI' trong chrome://flags.");
+      }
+      const session = await window.ai.languageModel.create();
+      const systemPrompt = `Bạn là chuyên gia sư phạm. Tư vấn ngắn gọn. Tên bài: ${lessonData?.lessonName || 'Chưa nhập'}.`;
+      const fullPrompt = `SYSTEM: ${systemPrompt}\n\nLỊCH SỬ:\n${hist.map(m => `${m.role}: ${m.content}`).join('\n')}\nUSER: ${msg}`;
+      return await session.prompt(fullPrompt);
+    };
+
+    // Remove AbortController for stability
+
     try {
+      if (modelType === 'chrome-nano') {
+        const reply = await runChromeAIChat(userMsg.content, messages);
+        setMessages([...newHistory, { role: 'assistant', content: reply }]);
+        return;
+      }
+
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -63,10 +81,20 @@ export default function AssistantChat({ lessonData, apiKey, modelType, onChatUpd
       } catch (e) {
         console.error("[AssistantChat] Lỗi parse JSON:", e);
       }
+      // No timeout clearance needed
 
-      if (!response.ok) throw new Error(data.details || data.error || `Lỗi hệ thống (HTTP ${response.status})`);
-
-      setMessages([...newHistory, { role: 'assistant', content: data.text }]);
+      if (!response.ok) {
+        const msg = data.error || '';
+        if (msg.includes('CẠN KIỆT AI') && window.ai?.languageModel) {
+          console.log("ULTIMATE CHAT FALLBACK: API failed. Trying Chrome Nano...");
+          const reply = await runChromeAIChat(userMsg.content, messages);
+          setMessages([...newHistory, { role: 'assistant', content: reply }]);
+        } else {
+          throw new Error(msg || `Lỗi hệ thống (HTTP ${response.status})`);
+        }
+      } else {
+        setMessages([...newHistory, { role: 'assistant', content: data.text }]);
+      }
     } catch (err) {
       setMessages([...newHistory, { role: 'assistant', content: `❌ Lỗi: ${err.message}` }]);
     } finally {

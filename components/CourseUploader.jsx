@@ -64,36 +64,59 @@ export default function CourseUploader({ onCourseAnalyzed, apiKey, modelId, onOp
         }
       }
 
-      showToast("Đang gửi cho AI phân tích...", "info");
+      const runChromeAIAnalyze = async (text) => {
+        if (!window.ai?.languageModel) {
+          throw new Error("Chrome Built-in AI chưa được kích hoạt. Vui lòng bật cờ 'Built-in AI' trong chrome://flags.");
+        }
+        const session = await window.ai.languageModel.create();
+        const fullPrompt = `Bạn là chuyên gia bóc tách chương trình đào tạo. 
+Trích xuất danh sách bài học từ nội dung này. 
+Yêu cầu JSON array: [{"tenBai": "...", "deMuc": "...", "gioLT": X, "gioTH": Y}]
+Nội dung: ${text}`;
+        const result = await session.prompt(fullPrompt);
+        const jsonMatch = result.match(/\[[\s\S]*\]/);
+        const lessons = JSON.parse(jsonMatch ? jsonMatch[0] : result);
+        return { lessons };
+      };
 
-      const res = await fetch('/api/analyze-file', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          apiKey,
-          modelId,
-          mode: 'analyze_syllabus',
-          fileData: {
-            mimeType,
-            data: base64Data,
-            rawText: rawText
+      if (modelId === 'chrome-nano') {
+        if (!rawText) throw new Error("Chrome Nano chỉ hỗ trợ đọc trực tiếp văn bản (Word/Text). Vui lòng dùng Gemini cho PDF/Ảnh.");
+        data = await runChromeAIAnalyze(rawText);
+      } else {
+        // No client-side timeout to allow full backend processing
+
+        const res = await fetch('/api/analyze-file', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            apiKey,
+            modelId,
+            mode: 'analyze_syllabus',
+            fileData: {
+              mimeType,
+              data: base64Data,
+              rawText: rawText
+            }
+          })
+        });
+
+        // No timeout clearance needed
+
+        try {
+          data = await res.json();
+        } catch (e) {
+          console.error("[CourseUploader] Lỗi parse JSON từ Backend:", e);
+        }
+
+        if (!res.ok) {
+          const errMsg = data.error || '';
+          if (errMsg.includes('CẠN KIỆT AI') && window.ai?.languageModel && rawText) {
+            console.log("ULTIMATE SYLLABUS FALLBACK: API failed. Trying Chrome Nano...");
+            data = await runChromeAIAnalyze(rawText);
+          } else {
+            throw new Error(errMsg || `Lỗi bóc tách từ AI (HTTP ${res.status})`);
           }
-        })
-      });
-
-      let data = {};
-      try {
-        data = await res.json();
-      } catch (e) {
-        console.error("[CourseUploader] Lỗi parse JSON từ Backend:", e);
-      }
-
-      console.log("[CourseUploader] AI trả về data:", data);
-
-      if (!res.ok) {
-        console.error("[CourseUploader] Lỗi từ Backend:", data);
-        const errMsg = data.details || data.error || `Lỗi bóc tách từ AI (HTTP ${res.status})`;
-        throw new Error(errMsg);
+        }
       }
       
       if (!data.lessons || data.lessons.length === 0) {
@@ -105,7 +128,11 @@ export default function CourseUploader({ onCourseAnalyzed, apiKey, modelId, onOp
 
     } catch (err) {
       console.error(err);
-      showToast(`Lỗi: ${err.message}`, "error");
+      if (err.name === 'AbortError' || err.message?.includes('aborted')) {
+        showToast("Yêu cầu bị ngắt (AbortError). Vui lòng kiểm tra kết nối mạng.", "error");
+      } else {
+        showToast(`Lỗi: ${err.message}`, "error");
+      }
       setFile(null);
     } finally {
       setIsReading(false);
@@ -161,7 +188,7 @@ export default function CourseUploader({ onCourseAnalyzed, apiKey, modelId, onOp
         {isReading ? (
           <div className="flex flex-col items-center gap-3">
             <Loader2 className="w-10 h-10 text-indigo-500 animate-spin" />
-            <p className="text-sm text-indigo-700 font-medium">AI đang bóc tách phân phối chương trình...</p>
+            <p className="text-sm text-indigo-700 font-medium italic">Đang bóc tách phân phối chương trình... Có thể mất 1-2 phút, thầy cô kiên nhẫn nhé!</p>
             <p className="text-xs text-indigo-500/70 text-balance px-4">Quy đổi: Tiết LT = Giờ LT | Tiết TH = (Giờ TH + Giờ KT) × 60/45</p>
           </div>
         ) : file ? (

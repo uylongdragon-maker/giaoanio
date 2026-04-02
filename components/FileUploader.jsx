@@ -38,7 +38,7 @@ export default function FileUploader({ onFileSummarized, apiKey, modelType }) {
         base64Data = base64Str.split(',')[1];
       }
       
-      const res = await fetch('/api/generate', {
+      const res = await fetch('/api/generate-lesson', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -1,13 +1,31 @@
 import { NextResponse } from 'next/server';
 
+export const maxDuration = 300;
+
 export async function POST(req) {
   try {
     const body = await req.json();
-    const { syllabus, startDate, dayConfigs, holidayList, apiKey, modelId } = body;
+    const { 
+      syllabus, 
+      startDate, 
+      dayConfigs, 
+      holidayList, 
+      apiKey, 
+      modelId, 
+      openAIKey 
+    } = body;
 
-    if (!apiKey) return NextResponse.json({ error: "Thiếu API Key cho việc xếp lịch AI." }, { status: 400 });
-    if (!syllabus || syllabus.length === 0 || !startDate || !dayConfigs) {
-      return NextResponse.json({ error: "Thiếu dữ liệu đầu vào cần thiết." }, { status: 400 });
+    let requestedModel = (modelId || 'gemini-1.5-flash').toLowerCase().trim();
+    if (requestedModel.startsWith('models/')) requestedModel = requestedModel.replace('models/', '');
+    
+    const isOpenAI = requestedModel.includes('gpt');
+    const isGemini = !isOpenAI;
+
+    if (isGemini && !apiKey) {
+      return NextResponse.json({ error: "Thiếu Gemini API Key cho việc xếp lịch AI." }, { status: 400 });
+    }
+    if (isOpenAI && !openAIKey) {
+      return NextResponse.json({ error: "Thiếu OpenAI API Key cho việc xếp lịch AI." }, { status: 400 });
     }
 
     const calculateSessions = () => {
@@ -33,17 +51,6 @@ export async function POST(req) {
     };
 
     const targetSessions = calculateSessions();
-    const MODEL_MAP = {
-      'gemini-flash-latest': 'gemini-flash-latest', 
-      'gemini-pro-latest': 'gemini-pro-latest',
-      'gemini-2.5-flash': 'gemini-2.5-flash',
-      'gemini-1.5-flash': 'gemini-1.5-flash-latest',
-    };
-
-    let requestedModel = (modelId || 'gemini-flash-latest').toLowerCase().trim();
-    if (requestedModel.startsWith('models/')) requestedModel = requestedModel.replace('models/', '');
-    let actualModel = MODEL_MAP[requestedModel] || requestedModel;
-
     const fullPrompt = `Bạn là chuyên gia sư phạm xếp lịch giảng dạy. 
 NHIỆM VỤ: Phân bổ nội dung từ ĐỀ CƯƠNG vào các buổi trong LỊCH TRÌNH.
 
@@ -54,102 +61,117 @@ DỮ LIỆU ĐẦU VÀO:
 QUY TẮC BẮT BUỘC:
 1. TỔNG THỜI LƯỢNG: Mỗi buổi học (Session) PHẢI được lấp đầy đúng số tiết pLimit của buổi đó.
 2. TỶ LỆ QUY ĐỔI: 1 giờ Lý thuyết (gioLT) = 1 Tiết (45p). 1 giờ khác (TH/KT/Thi) = 1.33 Tiết (60p).
-3. CHIA NHỎ BÀI HỌC (SPLITTING): Nếu một bài trong Đề cương có tổng số tiết lớn hơn pLimit của một buổi, bạn PHẢI chia bài đó ra nhiều buổi. Ví dụ Bài A có 6 tiết, buổi 1 dạy 4 tiết, buổi 2 dạy nốt 2 tiết.
-4. KIỂM TRA (gioKLT/gioKTH): Luôn là 1 tiết (45 phút). Có thể ghép chung với bài học khác trong cùng một buổi 180p.
-5. THI KẾT THÚC (gioTLT/gioTTH): Phải chiếm TRỌN VẸN 1 buổi (180 phút / 4 tiết). Không ghép thi với bài học khác.
-6. TÍNH ĐA DẠNG: Ưu tiên ghép LT và TH trong cùng một buổi để tạo giáo án Tích hợp, trừ khi bài đó thuần LT hoặc thuần TH.
-7. NỘI DUNG: Mỗi phần trong 'contents' phải ghi rõ 'gioLT_used' và 'gioTH_used' (số giờ thực tế, không phải số tiết quy đổi).
-
-CẤU TRÚC TRẢ VỀ (JSON ARRAY):
-[
-  {
-    "id": "session-1",
-    "date": "YYYY-MM-DD",
-    "totalPeriods": 4,
-    "contents": [
-      { "tenBai": "Tên bài", "subItem": "Mô tả nội dung", "gioLT_used": 1, "gioTH_used": 2.25 }
-    ]
-  }
-]
-CHỈ TRẢ VỀ JSON, KHÔNG GIẢI THÍCH.`;
+3. CHIA NHỎ BÀI HỌC: Nếu một bài lớn hơn pLimit, PHẢI chia ra nhiều buổi.
+4. KIỂM TRA/THI: Kiểm tra = 1 tiết. Thi = 1 buổi (180p/4 tiết).
+5. TRẢ VỀ: JSON ARRAY của các buổi học. Mỗi đối tượng trong mảng phải có cấu trúc:
+   {
+     "sessionTitle": "Tên tổng quát của buổi học",
+     "contents": [
+       { "tenBai": "Tên bài", "subItem": "Tiểu mục", "gioLT_used": X, "gioTH_used": Y }
+     ]
+   }
+   LƯU Ý: Phải trả về đúng số lượng buổi học như trong LỊCH TRÌNH đầu vào.`;
 
     const delay = (ms) => new Promise(res => setTimeout(res, ms));
 
-    const tryScheduleWithRetry = async () => {
-      let lastError = null;
-      let logs = [];
-      let tried = new Set();
+    // --- GEMINI HANDLER ---
+    const tryGemini = async () => {
+      const modelsToTry = [requestedModel, 'gemini-2.0-flash', 'gemini-1.5-flash-002', 'gemini-1.5-flash', 'gemini-1.5-pro-002', 'gemini-1.5-pro'];
+      let requestedModelError = null;
+      let lastError = "Hệ thống AI đang bận";
 
-      // FIXED CONFIGURATION: Use actual model first, then try the most reliable models to avoid spamming the API and triggering tighter rate limits.
-      const modelsToTry = [...new Set([actualModel, 'gemini-2.0-flash', 'gemini-1.5-flash-latest', 'gemini-pro-latest'])];
-
-      const callModel = async (mId, isRetry = false) => {
-        // Enforce v1beta as v1 is consistently failing for this user's key
-        const endpoint = 'v1beta';
-        const combo = `${mId}@${endpoint}`;
-        if (tried.has(combo) && !isRetry) return null;
-        tried.add(combo);
-        
-        try {
-          const fullPath = mId.includes('/') ? mId : `models/${mId}`;
-          const url = `https://generativelanguage.googleapis.com/${endpoint}/${fullPath}:generateContent?key=${apiKey.trim()}`;
-          
-          const res = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: fullPrompt }] }],
-              generationConfig: { responseMimeType: "application/json", temperature: 0.1 }
-            })
-          });
-          
-          const data = await res.json();
-          const logMsg = `[Trial] ${fullPath} ${isRetry ? '(Retry)' : ''} -> ${res.status}`;
-          logs.push(logMsg); console.log(logMsg);
-
-          if (res.ok) return data;
-          if (res.status === 429) return { error: 'quota', msg: data.error?.message };
-          return { error: 'fail', msg: data.error?.message || `Lỗi ${res.status}`, status: res.status };
-        } catch (e) { 
-          logs.push(`[Error] ${mId} -> ${e.message}`);
-          return { error: 'fail', msg: e.message }; 
-        }
-      };
-
-      // AGGRESSIVE BACKOFF LOOP FOR QUOTA EXHAUSTION
       for (const mId of modelsToTry) {
-        let retryCount = 0;
-        // Allows up to 4 retries per model, with massive delays
-        while (retryCount < 4) {
-          const result = await callModel(mId, retryCount > 0);
-          if (result && !result.error) return result;
-          
-          if (result?.error === 'quota') { 
-            // 429 Hit: Wait 5s, 10s, 20s, 30s
-            const waitTime = [5000, 10000, 20000, 30000][retryCount];
-            console.warn(`[Quota 429] Limit reached for ${mId}. Waiting ${waitTime/1000}s...`);
-            await delay(waitTime); 
-            retryCount++; 
-            continue; 
+        for (const v of ['v1beta']) {
+          let retryCount = 0;
+          while (retryCount < 2) {
+            try {
+              const url = `https://generativelanguage.googleapis.com/${v}/models/${mId}:generateContent?key=${apiKey.trim()}`;
+              const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  contents: [{ parts: [{ text: fullPrompt }] }],
+                  generationConfig: { response_mime_type: "application/json", temperature: 0.1 }
+                })
+              });
+              const data = await res.json();
+
+              if (!res.ok) {
+                const errMsg = data.error?.message || "Lỗi API";
+                if (mId === requestedModel && !requestedModelError) requestedModelError = errMsg;
+                
+                const isRetryable = res.status === 429 || res.status >= 500;
+                if (isRetryable && retryCount < 1) {
+                  retryCount++;
+                  const waitTime = [3000, 7000][retryCount - 1];
+                  console.warn(`[Sched Quota] Waiting ${waitTime/1000}s for ${mId}...`);
+                  await delay(waitTime);
+                  continue;
+                }
+                throw new Error(errMsg);
+              }
+
+              const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+              if (!text) throw new Error("AI không phản hồi nội dung.");
+
+              return { success: true, data: text };
+            } catch (err) {
+              lastError = err.message;
+              break; 
+            }
           }
-          
-          if (result?.msg) lastError = result.msg;
-          break; // If it's a 404/400, move to the next model immediately
         }
       }
-
-      const finalError = `Google AI Studio báo lỗi: API Key của bạn đã bị vượt quá giới hạn lượt dùng (Rate Limit/Quota 429).\nChi tiết: Vui lòng đợi khoảng 1-2 phút trước khi nhấn lại, hoặc cân nhắc sử dụng một API Key khác nếu bạn đang xếp lịch hàng loạt quá nhanh.\n\nCHI TIẾT MÁY CHỦ:\n${logs.join('\n')}`;
-      throw new Error(finalError);
+      throw new Error(`LỖI KẾT NỐI AI / SAI KEY: Hệ thống xếp lịch không thể gọi Gemini. Vui lòng kiểm tra API Key tại aistudio.google.com. Chi tiết: ${requestedModelError || lastError}`);
     };
 
-    const data = await tryScheduleWithRetry();
-    const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
-    const jsonMatch = responseText.match(/\[[\s\S]*\]/);
-    const sessions = JSON.parse(jsonMatch ? jsonMatch[0] : responseText.replace(/```json/gi, '').replace(/```/g, '').trim());
-    return NextResponse.json({ sessions }, { status: 200 });
+    // --- OPENAI HANDLER ---
+    const tryOpenAI = async () => {
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${openAIKey.trim()}` },
+        body: JSON.stringify({
+          model: requestedModel,
+          messages: [{ role: 'user', content: fullPrompt }],
+          response_format: { type: "json_object" }
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || `OpenAI Error ${res.status}`);
+      return data.choices[0].message.content;
+    };
+
+    let responseText = "";
+    if (requestedModel.includes('gpt')) {
+      responseText = await tryOpenAI();
+    } else {
+      const result = await tryGemini();
+      responseText = result.data || "[]";
+    }
+
+    try {
+      const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+      const aiSessions = JSON.parse(jsonMatch ? jsonMatch[0] : responseText.replace(/```json/gi, '').replace(/```/g, '').trim());
+      
+      // Merge AI contents back into targetSessions to preserve metadata (totalPeriods, date, id)
+      const finalSessions = targetSessions.map((meta, idx) => {
+        const aiData = aiSessions[idx] || {};
+        return {
+          ...meta,
+          contents: aiData.contents || [],
+          // Fallback title if AI didn't provide one for the session as a whole
+          sessionTitle: aiData.sessionTitle || (aiData.contents?.[0]?.tenBai ? `Bài học: ${aiData.contents[0].tenBai}` : `Buổi học ${idx + 1}`)
+        };
+      });
+
+      return NextResponse.json({ sessions: finalSessions }, { status: 200 });
+    } catch (e) {
+      console.error("Schedule Parse Error:", responseText);
+      return NextResponse.json({ error: "AI không trả về đúng định dạng lịch trình (JSON ARRAY)." }, { status: 500 });
+    }
 
   } catch (error) {
-    console.error("LỖI API:", error);
+    console.error("LỖI API SCHEDULE:", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

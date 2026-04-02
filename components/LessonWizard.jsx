@@ -95,7 +95,7 @@ export default function LessonWizard({ aiConfig, setAiConfig, sessionData, cours
     setGeneratedLesson(null);
 
     try {
-      const response = await fetch('/api/generate', {
+      const response = await fetch('/api/generate-lesson', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

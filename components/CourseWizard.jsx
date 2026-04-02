@@ -14,11 +14,9 @@ import SchedulingForm from '@/components/SchedulingForm';
 import { generateTimetable } from '@/app/utils/scheduler';
 
 const MODELS = [
-  { id: 'gemini-2.5-pro',           modelId: 'gemini-2.5-pro',                 label: 'Gemini 2.5 Pro (🚀 Siêu cấp)',        icon: '🚀' },
-  { id: 'gemini-2.5-flash',         modelId: 'gemini-2.5-flash',               label: 'Gemini 2.5 Flash (💨 Hyper)',        icon: '💨' },
-  { id: 'gemini-1.5-pro',           modelId: 'gemini-1.5-pro-latest',           label: 'Gemini 1.5 Pro (🧠 Thông minh)',      icon: '🤖' },
-  { id: 'gemini-1.5-flash',         modelId: 'gemini-1.5-flash-latest',         label: 'Gemini 1.5 Flash (⚡ Tốc độ)',       icon: '⚡' },
-  { id: 'gemini-2.0-flash-exp',     modelId: 'gemini-2.0-flash-exp',            label: 'Gemini 2.0 Flash (✨ Cân bằng)',     icon: '✨' },
+  { id: 'gemini-2.0-flash',         modelId: 'gemini-2.0-flash',           label: 'Gemini 2.0 Flash (🚀 Tối ưu)',        icon: '🚀' },
+  { id: 'gemini-1.5-flash-002',     modelId: 'gemini-1.5-flash-002',       label: 'Gemini 1.5 Flash-002 (⚡ Ổn định)',    icon: '⚡' },
+  { id: 'gemini-1.5-pro-002',       modelId: 'gemini-1.5-pro-002',         label: 'Gemini 1.5 Pro-002 (🧠 Chi tiết)',     icon: '🤖' },
 ];
 
 export default function CourseWizard({ onComplete }) {
@@ -32,7 +30,7 @@ export default function CourseWizard({ onComplete }) {
   const [courseName, setCourseName] = useState('');
   const [syllabus, setSyllabus] = useState([]);
   const [scheduleConfig, setScheduleConfig] = useState(null);
-  const [modelType, setModelType] = useState('gemini-1.5-flash');
+  const [modelType, setModelType] = useState('gemini-2.0-flash');
   const [finalSchedule, setFinalSchedule] = useState(null);
 
   useEffect(() => {
@@ -85,6 +83,8 @@ export default function CourseWizard({ onComplete }) {
   const handleScheduleComplete = async (startDate, dayConfigs, holidayList) => {
     setLoading(true);
     setError('');
+    // Client-side AbortController removed for stability
+
     try {
       const res = await fetch('/api/schedule-ai', {
         method: 'POST',
@@ -100,6 +100,7 @@ export default function CourseWizard({ onComplete }) {
       });
 
       const data = await res.json();
+      // No timeout clearance needed
       if (!res.ok) throw new Error(data.error || "Không thể xếp lịch bằng AI.");
 
       setFinalSchedule({ sessions: data.sessions, config: { startDate, dayConfigs, holidayList } });

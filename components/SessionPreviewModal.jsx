@@ -1,20 +1,23 @@
 import { useState, useEffect } from 'react';
 import { X, FileText, Download, CheckCircle2, Calendar, Clock, BookOpen, Bot, Plus, Loader2, RefreshCw } from 'lucide-react';
 
-export default function SessionPreviewModal({ isOpen, onClose, session, onReset, onSave, onGenerateAI }) {
+export default function SessionPreviewModal({ isOpen, onClose, session, onReset, onSave, onGenerateAI, isGenerating: isGeneratingProp }) {
   const [editedObjective, setEditedObjective] = useState('');
   const [editedActivities, setEditedActivities] = useState([]);
   const [lessonType, setLessonType] = useState('Lý thuyết'); // 'Lý thuyết', 'Thực hành', 'Tích hợp'
   const [generating, setGenerating] = useState(false);
+  const isGenerating = isGeneratingProp || generating;
   const [error, setError] = useState('');
 
-  const totalMinutes = editedActivities.reduce((sum, act) => sum + (parseInt(act.phut) || 0), 0);
+  const totalMinutes = editedActivities.reduce((sum, act) => sum + (Number(act.phut) || 0), 0);
+  const periods = Number(session?.totalPeriods) || 4;
+  const targetMinutes = periods * 45;
 
   // Sync state when session or generatedLesson changes
   useEffect(() => {
     const lesson = session?.generatedLesson;
     setEditedObjective(lesson?.objectives || lesson?.muc_tieu || "");
-    setEditedActivities(lesson?.activities || []);
+    setEditedActivities(lesson?.activities || lesson?.lessonRows || []);
     
     // Content-Driven Pedagocial Classification
     const contents = session.contents || [];
@@ -112,6 +115,14 @@ export default function SessionPreviewModal({ isOpen, onClose, session, onReset,
         </div>
 
         <p style="font-family: 'Times New Roman';"><b>II. NỘI DUNG CHI TIẾT:</b></p>
+        
+        {isGenerating && (
+          <div className="flex items-center gap-2 mb-3 bg-amber-50 text-amber-600 px-4 py-2 rounded-xl text-xs font-bold animate-pulse border border-amber-100 italic">
+            <Zap className="w-3 h-3" />
+            ĐANG ĐỒNG BỘ LUỒNG AI (REAL-TIME)...
+          </div>
+        )}
+
         <table border="1" style="border-collapse: collapse; width: 100%; font-family: 'Times New Roman'; font-size: 10pt;">
           <thead>
             <tr style="background-color: #f2f2f2;">
@@ -196,26 +207,25 @@ export default function SessionPreviewModal({ isOpen, onClose, session, onReset,
                 {new Date(session.date + 'T00:00:00').toLocaleDateString('vi-VN')}
               </div>
               <div className="flex items-center gap-2">
-                <Clock className="w-3 h-3 text-indigo-500" />
-                {session.totalPeriods} tiết ({session.totalPeriods * 45} phút)
+                {periods} tiết ({targetMinutes} phút)
               </div>
             </div>
           </div>
           <div className="flex items-center gap-3">
             <div className="flex flex-col items-end">
               <div className={`flex items-center gap-2 px-4 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-widest transition-all ${
-                totalMinutes === 180 
+                totalMinutes === targetMinutes 
                   ? 'bg-emerald-50 border-emerald-200 text-emerald-600 shadow-sm' 
-                  : totalMinutes > 180 
+                  : totalMinutes > targetMinutes 
                     ? 'bg-rose-50 border-rose-200 text-rose-600 animate-pulse' 
                     : 'bg-amber-50 border-amber-200 text-amber-600'
               }`}>
                 <Clock className="w-3 h-3" />
-                {totalMinutes} / 180 PHÚT
+                {totalMinutes} / {targetMinutes} PHÚT
               </div>
-              {totalMinutes !== (session.totalPeriods * 45) && (
-                <span className={`text-[9px] font-black mt-1 uppercase italic ${totalMinutes > (session.totalPeriods * 45) ? 'text-rose-500' : 'text-amber-500'}`}>
-                   {totalMinutes > (session.totalPeriods * 45) ? `⚠️ LỐ BIÊN ĐỘ: +${totalMinutes - (session.totalPeriods * 45)}p` : `⚠️ CHƯA ĐỦ: -${(session.totalPeriods * 45) - totalMinutes}p`}
+              {totalMinutes !== targetMinutes && (
+                <span className={`text-[9px] font-black mt-1 uppercase italic ${totalMinutes > targetMinutes ? 'text-rose-500' : 'text-amber-500'}`}>
+                   {totalMinutes > targetMinutes ? `⚠️ LỐ BIÊN ĐỘ: +${totalMinutes - targetMinutes}p` : `⚠️ CHƯA ĐỦ: -${targetMinutes - totalMinutes}p`}
                 </span>
               )}
             </div>
@@ -299,11 +309,15 @@ export default function SessionPreviewModal({ isOpen, onClose, session, onReset,
                 <div className="flex gap-2">
                   <button 
                     onClick={handleGenerateAI} 
-                    disabled={generating}
-                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl font-bold shadow-lg shadow-indigo-200 transition-all flex items-center gap-2 text-xs"
+                    disabled={isGenerating}
+                    className={`px-4 py-2 rounded-xl font-bold shadow-lg transition-all flex items-center gap-2 text-xs ${
+                      isGenerating 
+                        ? 'bg-slate-400 text-slate-100 cursor-not-allowed shadow-none' 
+                        : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-200'
+                    }`}
                   >
-                    {generating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Bot className="w-3 h-3" />}
-                    SOẠN LẠI {lessonType.toUpperCase()} BẰNG AI
+                    {isGenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Bot className="w-3 h-3" />}
+                    {isGenerating ? "ĐANG SOẠN (VUI LÒNG ĐỢI)..." : `SOẠN LẠI ${lessonType.toUpperCase()} BẰNG AI`}
                   </button>
                   <button onClick={addActivity} className="w-9 h-9 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-all flex items-center justify-center border border-slate-200">
                     <Plus className="w-4 h-4" />
@@ -328,14 +342,6 @@ export default function SessionPreviewModal({ isOpen, onClose, session, onReset,
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 relative">
-                    {generating && (
-                      <tr className="absolute inset-0 z-10 bg-white/70 backdrop-blur-sm flex flex-col items-center justify-center w-full min-h-[200px]">
-                        <td colSpan={lessonType === 'Lý thuyết' ? 4 : 6} className="text-center py-20 flex flex-col items-center justify-center w-full">
-                           <Loader2 className="w-8 h-8 text-indigo-600 animate-spin mb-4" />
-                           <p className="text-indigo-600 font-black text-xs tracking-widest animate-pulse">AI ĐANG SOẠN {lessonType.toUpperCase()}...</p>
-                        </td>
-                      </tr>
-                    )}
                     {editedActivities.map((act, index) => (
                       <tr key={index} className={`group hover:bg-slate-50 transition-colors ${act.phut > 15 ? 'bg-rose-50/30' : ''}`}>
                         <td className="px-4 py-4 align-top text-center border-b border-slate-100">
@@ -424,14 +430,14 @@ export default function SessionPreviewModal({ isOpen, onClose, session, onReset,
              <div className="flex flex-col">
                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Thời lượng tổng cộng (Quy chuẩn):</span>
                <div className="flex items-center gap-2">
-                 <span className={`text-xl font-black ${totalMinutes === 180 ? 'text-emerald-600' : 'text-slate-900'}`}>{totalMinutes} Phút</span>
-                 {totalMinutes === (session.totalPeriods * 45) ? (
+                 <span className={`text-xl font-black ${totalMinutes === targetMinutes ? 'text-emerald-600' : 'text-slate-900'}`}>{totalMinutes} Phút</span>
+                 {totalMinutes === targetMinutes ? (
                    <div className="flex items-center gap-1 text-[9px] font-black bg-emerald-600 text-white px-3 py-1 rounded-full uppercase shadow-md shadow-emerald-100">
-                     <CheckCircle2 className="w-3 h-3" /> ĐÚNG {session.totalPeriods * 45}P
+                     <CheckCircle2 className="w-3 h-3" /> ĐÚNG {targetMinutes}P
                    </div>
                  ) : (
-                   <div className={`flex items-center gap-1 text-[9px] font-black text-white px-3 py-1 rounded-full uppercase whitespace-nowrap shadow-md ${totalMinutes > (session.totalPeriods * 45) ? 'bg-rose-600 shadow-rose-100' : 'bg-amber-600 shadow-amber-100'}`}>
-                     {totalMinutes > (session.totalPeriods * 45) ? `LỐ ${totalMinutes - (session.totalPeriods * 45)}P` : `THIẾU ${(session.totalPeriods * 45) - totalMinutes}P`}
+                   <div className={`flex items-center gap-1 text-[9px] font-black text-white px-3 py-1 rounded-full uppercase whitespace-nowrap shadow-md ${totalMinutes > targetMinutes ? 'bg-rose-600 shadow-rose-100' : 'bg-amber-600 shadow-amber-100'}`}>
+                     {totalMinutes > targetMinutes ? `LỐ ${totalMinutes - targetMinutes}P` : `THIẾU ${targetMinutes - totalMinutes}P`}
                    </div>
                  )}
                </div>
@@ -440,15 +446,16 @@ export default function SessionPreviewModal({ isOpen, onClose, session, onReset,
           <div className="flex items-center gap-3 w-full md:w-auto">
             <button 
               onClick={() => onReset && onReset(session.id)}
-              className="px-5 py-3 bg-white hover:bg-rose-50 text-rose-500 font-bold rounded-xl border border-slate-200 hover:border-rose-200 flex items-center gap-2 transition-all active:scale-95 text-xs"
+              disabled={generating}
+              className="px-5 py-3 bg-white hover:bg-rose-50 disabled:opacity-50 text-rose-500 font-bold rounded-xl border border-slate-200 hover:border-rose-200 flex items-center gap-2 transition-all active:scale-95 text-xs"
             >
               <RefreshCw className="w-4 h-4" /> LÀM MỚI
             </button>
             <button 
               onClick={handleExportWord}
-              disabled={totalMinutes !== 180}
+              disabled={totalMinutes !== targetMinutes || generating}
               className={`flex-1 md:flex-none px-6 py-3 rounded-2xl font-black text-xs transition-all flex items-center justify-center gap-2 shadow-lg ${
-                totalMinutes === 180 
+                (totalMinutes === targetMinutes && !generating)
                   ? 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-slate-100' 
                   : 'bg-slate-50 text-slate-300 border border-slate-100 cursor-not-allowed'
               }`}
@@ -457,7 +464,8 @@ export default function SessionPreviewModal({ isOpen, onClose, session, onReset,
             </button>
             <button 
               onClick={handleSave}
-              className="flex-1 md:flex-none px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-xs shadow-lg shadow-indigo-200 transition-all flex items-center justify-center gap-2"
+              disabled={generating}
+              className="flex-1 md:flex-none px-8 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-2xl font-black text-xs shadow-lg shadow-indigo-200 transition-all flex items-center justify-center gap-2"
             >
               <CheckCircle2 className="w-4 h-4" /> LƯU GIÁO ÁN
             </button>
