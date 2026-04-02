@@ -6,6 +6,8 @@ import useStore from '@/app/store/useStore';
 import SessionPreviewModal from '@/components/SessionPreviewModal';
 import { experimental_useObject as useObject } from '@ai-sdk/react';
 import { z } from 'zod';
+import { auth, db } from '@/lib/firebase';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
 const LessonRowSchema = z.object({
   segmentTitle: z.string(),
@@ -32,6 +34,28 @@ export default function Step5Execution({ aiConfig }) {
   const [currentSessionId, setCurrentSessionId] = useState(null);
   const [currentFinalType, setCurrentFinalType] = useState('');
   const [finalData, setFinalData] = useState(null);
+
+  // Hàm lưu trữ giáo án vào Firebase (UID-based partitioning)
+  const saveLessonToFirebase = async (lessonData) => {
+    const user = auth.currentUser;
+    if (!user) {
+      console.warn("Người dùng chưa đăng nhập, không thể lưu Firebase!");
+      return;
+    }
+
+    try {
+      await addDoc(collection(db, "lessons"), {
+        userId: user.uid,
+        userEmail: user.email,
+        title: "Giáo án AI: " + (lessonData.lessonTitle || activeCourse?.title || "Chưa đặt tên"),
+        content: lessonData,
+        createdAt: serverTimestamp()
+      });
+      console.log("✅ Đã lưu giáo án vào Firebase!");
+    } catch (error) {
+      console.error("🚨 Lỗi Firebase:", error);
+    }
+  };
 
   const { object, submit, isLoading: isStreaming, error: streamingError } = useObject({
     api: '/api/generate-lesson',
@@ -89,8 +113,12 @@ export default function Step5Execution({ aiConfig }) {
   // PHẦN 1: BẮT DÍNH DỮ LIỆU STREAMING KHÔNG CHO BIẾN MẤT
   useEffect(() => {
     if (!isStreaming && object && object.lessonRows) {
-      console.log("Stream xong! Đã hứng dữ liệu vào finalData.");
-      setFinalData(object);
+      console.log("Stream xong! Kiểm tra và lưu dữ liệu.");
+      // Đoạn này ưu tiên finalData (đã chuẩn hóa) nếu có, nếu không thì dùng object
+      const dataToSave = finalData || object;
+      if (!finalData) setFinalData(object);
+      
+      saveLessonToFirebase(dataToSave);
     }
   }, [isStreaming, object]);
 
