@@ -461,13 +461,11 @@ YÊU CẦU: Tạo lịch buổi học (4 tiết/buổi). Trả về JSON ARRAY: 
                 return { ...c, type };
               });
 
-              const subTypes = new Set(processedContents.map(c => c.type).filter(Boolean).map(t => t.normalize('NFC')));
-              let overallType = 'Lý thuyết';
-              if (subTypes.size > 1) overallType = 'Tích hợp';
-              else if (subTypes.has('Thực hành'.normalize('NFC')) || subTypes.has('Tích hợp'.normalize('NFC'))) {
-                 overallType = 'Thực hành';
-              }
-              if (subTypes.has('Tích hợp'.normalize('NFC'))) overallType = 'Tích hợp';
+              const totalLT = (session.contents || []).reduce((sum, c) => sum + (Number(c.gioLT_used) || 0), 0);
+              const totalTH = (session.contents || []).reduce((sum, c) => sum + (Number(c.gioTH_used) || 0), 0);
+              let sessionType = "LÝ THUYẾT";
+              if (totalTH > 0 && totalLT === 0) sessionType = "THỰC HÀNH";
+              if (totalTH > 0 && totalLT > 0) sessionType = "TÍCH HỢP";
 
               return (
                 <div 
@@ -485,11 +483,11 @@ YÊU CẦU: Tạo lịch buổi học (4 tiết/buổi). Trả về JSON ARRAY: 
                        <div className="flex items-center gap-2">
                          <p className="text-xs font-black text-slate-900 uppercase">Buổi {idx + 1}</p>
                          <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full border ${
-                            overallType?.normalize('NFC') === 'Tích hợp'.normalize('NFC') ? 'bg-indigo-600 text-white border-indigo-600' :
-                            (overallType?.normalize('NFC') === 'Thực hành'.normalize('NFC') || session.sessionTitle?.toLowerCase().includes("kiểm tra")) ? 'bg-amber-500 text-white border-amber-500' :
+                            sessionType === 'TÍCH HỢP' || sessionType === 'TÍCH HỢP' ? 'bg-indigo-600 text-white border-indigo-600' :
+                            (sessionType === 'THỰC HÀNH' || sessionType === 'THỰC HÀNH' || session.sessionTitle?.toLowerCase().includes("kiểm tra")) ? 'bg-amber-500 text-white border-amber-500' :
                             'bg-slate-800 text-white border-slate-800'
                          }`}>
-                            {overallType}
+                            {sessionType}
                          </span>
                        </div>
                      </div>
@@ -538,11 +536,11 @@ YÊU CẦU: Tạo lịch buổi học (4 tiết/buổi). Trả về JSON ARRAY: 
                      <div className="flex flex-col gap-1">
                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-1">{session.totalPeriods || 4} TIẾT (180P)</span>
                        <div className={`text-[9px] font-black uppercase px-2 py-1 rounded-lg border transition-all ${
-                          overallType?.normalize('NFC') === 'Tích hợp'.normalize('NFC') ? 'bg-indigo-50 border-indigo-100 text-indigo-600' :
-                          (overallType?.normalize('NFC') === 'Thực hành'.normalize('NFC') || (session.contents || []).some(c => c.subItem?.toLowerCase().includes("kiểm tra"))) ? 'bg-amber-50 border-amber-100 text-amber-600' :
+                          sessionType === 'TÍCH HỢP' || sessionType === 'TÍCH HỢP' ? 'bg-indigo-50 border-indigo-100 text-indigo-600' :
+                          (sessionType === 'THỰC HÀNH' || sessionType === 'THỰC HÀNH' || (session.contents || []).some(c => c.subItem?.toLowerCase().includes("kiểm tra"))) ? 'bg-amber-50 border-amber-100 text-amber-600' :
                           'bg-slate-50 border-slate-100 text-slate-500'
                        }`}>
-                          {overallType}
+                          {sessionType}
                        </div>
                      </div>
                      {loading && previewSession?.id === session.id ? (

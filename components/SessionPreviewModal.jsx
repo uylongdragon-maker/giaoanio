@@ -32,21 +32,12 @@ export default function SessionPreviewModal({ isOpen, onClose, session, onReset,
     setEditedObjective(lesson?.objectives || lesson?.muc_tieu || "");
     setEditedActivities(lesson?.activities || lesson?.lessonRows || []);
     
-    // Content-Driven Pedagocial Classification
-    const contents = session.contents || [];
-    const processedSubs = contents.map(c => {
-      const name = (c.subItem || "").toLowerCase();
-      let type = c.type || 'Lý thuyết';
-      if (name.includes("kiểm tra") || name.includes("thi") || name.includes("test") || name.includes("quiz")) {
-        type = 'Thực hành';
-      }
-      return { ...c, type };
-    });
-
-    const subTypes = new Set(processedSubs.map(c => c.type).filter(Boolean).map(t => t.normalize('NFC')));
-    let finalType = 'Lý thuyết';
-    if (subTypes.size > 1) finalType = 'Tích hợp';
-    else if (subTypes.has('Thực hành'.normalize('NFC'))) finalType = 'Thực hành';
+    const totalLT = (session.contents || []).reduce((sum, c) => sum + (Number(c.gioLT_used) || 0), 0);
+    const totalTH = (session.contents || []).reduce((sum, c) => sum + (Number(c.gioTH_used) || 0), 0);
+    
+    let finalType = 'LÝ THUẾT';
+    if (totalTH > 0 && totalLT === 0) finalType = 'THỰC HÀNH';
+    if (totalTH > 0 && totalLT > 0) finalType = 'TÍCH HỢP';
     
     setLessonType(finalType);
   }, [session, session?.generatedLesson]);
