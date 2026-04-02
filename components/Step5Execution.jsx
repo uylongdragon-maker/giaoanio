@@ -31,7 +31,7 @@ export default function Step5Execution({ aiConfig }) {
   const templateInputRef = useRef(null);
   const [currentSessionId, setCurrentSessionId] = useState(null);
   const [currentFinalType, setCurrentFinalType] = useState('');
-  const [finalLessonData, setFinalLessonData] = useState(null);
+  const [finalData, setFinalData] = useState(null);
 
   const { object, submit, isLoading: isStreaming, error: streamingError } = useObject({
     api: '/api/generate-lesson',
@@ -64,7 +64,7 @@ export default function Step5Execution({ aiConfig }) {
           lessonType: currentFinalType
         };
 
-        setFinalLessonData(finalData);
+        setFinalData(finalData);
         
         const updatedSchedule = activeCourse.schedule.map(s => 
           s.id === currentSessionId ? { ...s, generatedLesson: finalData, status: 'completed', lessonType: currentFinalType } : s
@@ -85,6 +85,14 @@ export default function Step5Execution({ aiConfig }) {
       // handled in useEffect below
     }
   });
+
+  // PHẦN 1: BẮT DÍNH DỮ LIỆU STREAMING KHÔNG CHO BIẾN MẤT
+  useEffect(() => {
+    if (!isStreaming && object && object.lessonRows) {
+      console.log("Stream xong! Đã hứng dữ liệu vào finalData.");
+      setFinalData(object);
+    }
+  }, [isStreaming, object]);
 
   useEffect(() => {
     if (streamingError) {
@@ -256,7 +264,7 @@ YÊU CẦU: Tạo lịch buổi học (4 tiết/buổi). Trả về JSON ARRAY: 
           return;
         }
 
-        setFinalLessonData(null); // Reset before new stream
+        setFinalData(null); // Reset before new stream
 
         // STREAMING VIA SDK
         const uniqueLessonNames = Array.from(new Set(sessionParam.contents.map(c => c.lessonName).filter(Boolean)));
@@ -463,9 +471,14 @@ YÊU CẦU: Tạo lịch buổi học (4 tiết/buổi). Trả về JSON ARRAY: 
 
               const totalLT = (session.contents || []).reduce((sum, c) => sum + (Number(c.gioLT_used) || 0), 0);
               const totalTH = (session.contents || []).reduce((sum, c) => sum + (Number(c.gioTH_used) || 0), 0);
+              const totalKT = (session.contents || []).reduce((sum, c) => sum + (Number(c.gioKT_used) || 0), 0);
+              const totalThi = (session.contents || []).reduce((sum, c) => sum + (Number(c.gioThi_used) || 0), 0);
+              
               let sessionType = "LÝ THUYẾT";
-              if (totalTH > 0 && totalLT === 0) sessionType = "THỰC HÀNH";
+              if (totalTH > 0) sessionType = "THỰC HÀNH";
               if (totalTH > 0 && totalLT > 0) sessionType = "TÍCH HỢP";
+              if (totalKT > 0) sessionType = "KIỂM TRA"; 
+              if (totalThi > 0) sessionType = "THI";
 
               return (
                 <div 
@@ -484,7 +497,9 @@ YÊU CẦU: Tạo lịch buổi học (4 tiết/buổi). Trả về JSON ARRAY: 
                          <p className="text-xs font-black text-slate-900 uppercase">Buổi {idx + 1}</p>
                          <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full border ${
                             sessionType === 'TÍCH HỢP' || sessionType === 'TÍCH HỢP' ? 'bg-indigo-600 text-white border-indigo-600' :
-                            (sessionType === 'THỰC HÀNH' || sessionType === 'THỰC HÀNH' || session.sessionTitle?.toLowerCase().includes("kiểm tra")) ? 'bg-amber-500 text-white border-amber-500' :
+                            (sessionType === 'THỰC HÀNH' || sessionType === 'THỰC HÀNH') ? 'bg-amber-500 text-white border-amber-500' :
+                            sessionType === 'KIỂM TRA' ? 'bg-rose-600 text-white border-rose-600' :
+                            sessionType === 'THI' ? 'bg-black text-white border-black' :
                             'bg-slate-800 text-white border-slate-800'
                          }`}>
                             {sessionType}
@@ -535,11 +550,13 @@ YÊU CẦU: Tạo lịch buổi học (4 tiết/buổi). Trả về JSON ARRAY: 
                   <div className="mt-auto pt-4 border-t border-slate-100 flex items-center justify-between">
                      <div className="flex flex-col gap-1">
                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-1">{session.totalPeriods || 4} TIẾT (180P)</span>
-                       <div className={`text-[9px] font-black uppercase px-2 py-1 rounded-lg border transition-all ${
-                          sessionType === 'TÍCH HỢP' || sessionType === 'TÍCH HỢP' ? 'bg-indigo-50 border-indigo-100 text-indigo-600' :
-                          (sessionType === 'THỰC HÀNH' || sessionType === 'THỰC HÀNH' || (session.contents || []).some(c => c.subItem?.toLowerCase().includes("kiểm tra"))) ? 'bg-amber-50 border-amber-100 text-amber-600' :
-                          'bg-slate-50 border-slate-100 text-slate-500'
-                       }`}>
+                        <div className={`text-[9px] font-black uppercase px-2 py-1 rounded-lg border transition-all ${
+                           sessionType === "TÍCH HỢP" || sessionType === "TÍCH HỢP" ? "bg-indigo-50 border-indigo-100 text-indigo-600" :
+                           (sessionType === "THỰC HÀNH" || sessionType === "THỰC HÀNH") ? "bg-amber-50 border-amber-100 text-amber-600" :
+                           sessionType === "KIỂM TRA" ? "bg-rose-50 border-rose-100 text-rose-600" :
+                           sessionType === "THI" ? "bg-slate-900 border-slate-700 text-white" :
+                           "bg-slate-50 border-slate-100 text-slate-500"
+                        }}>
                           {sessionType}
                        </div>
                      </div>
@@ -565,8 +582,8 @@ YÊU CẦU: Tạo lịch buổi học (4 tiết/buổi). Trả về JSON ARRAY: 
           session={
             isStreaming && currentSessionId === previewSession.id && object
               ? { ...previewSession, generatedLesson: { lessonRows: object.lessonRows, muc_tieu: object.muc_tieu }, status: 'generating' }
-              : (finalLessonData && currentSessionId === previewSession.id)
-                ? { ...previewSession, generatedLesson: finalLessonData, status: 'completed' }
+              : (finalData && currentSessionId === previewSession.id)
+                ? { ...previewSession, generatedLesson: finalData, status: 'completed' }
                 : previewSession
           }
           onReset={handleResetSession}

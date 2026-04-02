@@ -25,7 +25,7 @@ export async function POST(req) {
         let totalRequired = 0;
         syllabus.forEach(item => {
           const hLt = parseFloat(item.gioLT) || 0;
-          const others = (parseFloat(item.gioTH) || 0) + (parseFloat(item.gioKLT) || 0) + (parseFloat(item.gioKTH) || 0) + (parseFloat(item.gioTLT) || 0) + (parseFloat(item.gioTTH) || 0);
+          const others = (parseFloat(item.gioTH) || 0) + (parseFloat(item.gioKLT) || 0) + (parseFloat(item.gioKTH) || 0) + (parseFloat(item.gioTLT) || 0) + (parseFloat(item.gioTTH) || 0) + (parseFloat(item.gioKT) || 0) + (parseFloat(item.gioThi) || 0);
           totalRequired += hLt + (others * 60 / 45);
         });
         const totalPeriodsNeeded = Math.ceil(totalRequired);
@@ -48,7 +48,9 @@ export async function POST(req) {
     const miniSyllabus = syllabus.map(item => ({
        tenBai: item.tenBai,
        gioLT: item.gioLT,
-       gioTH: item.gioTH
+       gioTH: item.gioTH,
+       gioKT: item.gioKT,
+       gioThi: item.gioThi
     }));
 
     const result = await generateObject({
@@ -60,10 +62,12 @@ export async function POST(req) {
             tenBai: z.string(),
             gioLT_used: z.number(),
             gioTH_used: z.number(),
+            gioKT_used: z.number().optional(),
+            gioThi_used: z.number().optional(),
           }))
         }))
       }),
-      prompt: `Xếp Lịch. Đầu vào: ${JSON.stringify(miniSyllabus)}. Khung rỗng: ${JSON.stringify(targetSessions)}. Khớp tên bài và chia giờ. Output JSON ngắn gọn.`,
+      prompt: `Xếp Lịch. Đầu vào: ${JSON.stringify(miniSyllabus)}. Khung rỗng: ${JSON.stringify(targetSessions)}. Khớp tên bài và chia giờ (LT, TH, Kiểm tra, Thi). Output JSON ngắn gọn.`,
     });
 
     // Trả về JSON một cục luôn, không stream. Ánh xạ lại subItem từ syllabus gốc để UI không bị trống.
@@ -74,7 +78,9 @@ export async function POST(req) {
          return { 
            ...c, 
            subItem: original?.subItem || c.tenBai,
-           lessonName: original?.tenBai || c.tenBai 
+           lessonName: original?.tenBai || c.tenBai,
+           gioKT_used: c.gioKT_used || 0,
+           gioThi_used: c.gioThi_used || 0
          };
       });
       return {

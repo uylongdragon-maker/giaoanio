@@ -34,10 +34,14 @@ export default function SessionPreviewModal({ isOpen, onClose, session, onReset,
     
     const totalLT = (session.contents || []).reduce((sum, c) => sum + (Number(c.gioLT_used) || 0), 0);
     const totalTH = (session.contents || []).reduce((sum, c) => sum + (Number(c.gioTH_used) || 0), 0);
+    const totalKT = (session.contents || []).reduce((sum, c) => sum + (Number(c.gioKT_used) || 0), 0);
+    const totalThi = (session.contents || []).reduce((sum, c) => sum + (Number(c.gioThi_used) || 0), 0);
     
     let finalType = 'LÝ THUẾT';
-    if (totalTH > 0 && totalLT === 0) finalType = 'THỰC HÀNH';
+    if (totalTH > 0) finalType = 'THỰC HÀNH';
     if (totalTH > 0 && totalLT > 0) finalType = 'TÍCH HỢP';
+    if (totalKT > 0) finalType = 'KIỂM TRA';
+    if (totalThi > 0) finalType = 'THI';
     
     setLessonType(finalType);
   }, [session, session?.generatedLesson]);
@@ -193,8 +197,10 @@ export default function SessionPreviewModal({ isOpen, onClose, session, onReset,
                 {session.sessionTitle || Array.from(new Set(session.contents.map(c => c.lessonName).filter(Boolean))).join(' & ')}
               </h2>
               <span className={`text-[10px] font-black uppercase px-3 py-1 rounded-full border shadow-sm ${
-                lessonType?.normalize('NFC') === 'Tích hợp'.normalize('NFC') ? 'bg-indigo-600 text-white border-indigo-600' :
-                (lessonType?.normalize('NFC') === 'Thực hành'.normalize('NFC') || session.sessionTitle?.toLowerCase().includes("kiểm tra")) ? 'bg-amber-500 text-white border-amber-500' :
+                (lessonType === 'TÍCH HỢP' || lessonType === 'TÍCH HỢP') ? 'bg-indigo-600 text-white border-indigo-600' :
+                (lessonType === 'THỰC HÀNH' || lessonType === 'THỰC HÀNH') ? 'bg-amber-500 text-white border-amber-500' :
+                (lessonType === 'KIỂM TRA' || lessonType === 'KIỂM TRA') ? 'bg-rose-600 text-white border-rose-600' :
+                lessonType === 'THI' ? 'bg-black text-white border-black' :
                 'bg-slate-800 text-white border-slate-800'
               }`}>
                 {lessonType}
