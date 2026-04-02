@@ -291,6 +291,7 @@ export default function CourseWizard({ onComplete }) {
             <SchedulingForm 
               lessons={syllabus} 
               onScheduleComplete={handleScheduleComplete} 
+              isGenerating={loading}
             />
             <button onClick={() => setStep(4)} className="w-full mt-4 bg-white/5 hover:bg-white/10 text-white font-bold py-3 rounded-2xl transition-all">Quay lại bảng duyệt</button>
           </div>

@@ -1,10 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { Calendar, CheckCircle2, Sparkles, Clock } from 'lucide-react';
+import { Calendar, CheckCircle2, Sparkles, Clock, Loader2 } from 'lucide-react';
 import { generateTimetable } from '../app/utils/scheduler';
 
-export default function SchedulingForm({ lessons, onScheduleComplete }) {
+export default function SchedulingForm({ lessons, onScheduleComplete, isGenerating }) {
   const [startDate, setStartDate] = useState('');
   const [dayConfigs, setDayConfigs] = useState({}); // { [dayIndex]: periods }
   const [holidays, setHolidays] = useState('');
@@ -174,10 +174,15 @@ export default function SchedulingForm({ lessons, onScheduleComplete }) {
 
         <button
           onClick={handleSchedule}
-          className="w-full bg-indigo-600 hover:bg-slate-900 text-white font-black py-5 px-6 rounded-[24px] shadow-xl shadow-indigo-100 transition-all hover:-translate-y-1 flex items-center justify-center gap-3 mt-4 group"
+          disabled={isGenerating}
+          className={`w-full font-black py-5 px-6 rounded-[24px] shadow-xl transition-all flex items-center justify-center gap-3 mt-4 group ${
+            isGenerating 
+              ? 'bg-slate-400 text-slate-100 cursor-not-allowed shadow-none' 
+              : 'bg-indigo-600 hover:bg-slate-900 text-white shadow-indigo-100'
+          }`}
         >
-          <Sparkles className="w-6 h-6 group-hover:animate-spin" /> 
-          HOÀN TẤT & KHỞI TẠO SMART HUB
+          {isGenerating ? <Loader2 className="w-6 h-6 animate-spin" /> : <Sparkles className="w-6 h-6 group-hover:animate-spin" />}
+          {isGenerating ? "ĐANG XẾP LỊCH (VUI LÒNG ĐỢI)..." : "HOÀN TẤT & KHỞI TẠO SMART HUB"}
         </button>
       </div>
     </div>

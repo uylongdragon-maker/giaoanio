@@ -342,7 +342,7 @@ YÊU CẦU: Tạo lịch buổi học (4 tiết/buổi). Trả về JSON ARRAY: 
                 className="px-6 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold transition-all flex items-center gap-2 shadow-lg shadow-indigo-200"
               >
                 {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <RefreshCw className="w-5 h-5" />}
-                CẬP NHẬT LỊCH DẠY
+                {loading ? "ĐANG XẾP LẠI LỊCH..." : "CẬP NHẬT LỊCH DẠY"}
               </button>
             )}
             <button onClick={resetWorkflow} className="px-6 py-4 bg-white hover:bg-rose-50 text-slate-500 hover:text-rose-600 rounded-2xl border border-slate-200 font-bold transition-all flex items-center gap-2">
@@ -431,7 +431,7 @@ YÊU CẦU: Tạo lịch buổi học (4 tiết/buổi). Trả về JSON ARRAY: 
                 {loading ? (
                   <div className="flex flex-col items-center gap-2">
                     <Loader2 className="w-10 h-10 animate-spin" />
-                    <span className="text-sm font-bold opacity-80 italic">Đang phân bổ dữ liệu giáo án 180 phút... Có thể mất 1-2 phút, thầy cô kiên nhẫn nhé!</span>
+                    <span className="text-sm font-bold opacity-80 italic">ĐANG XẾP LỊCH (180 PHÚT/BUỔI)... ĐỢI 10-20 GIÂY THẦY CÔ NHÉ!</span>
                   </div>
                 ) : (
                   <>
