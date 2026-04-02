@@ -45,6 +45,12 @@ export async function POST(req) {
 
     const targetSessions = calculateSessionsMeta();
     
+    const miniSyllabus = syllabus.map(item => ({
+       tenBai: item.tenBai,
+       gioLT: item.gioLT,
+       gioTH: item.gioTH
+    }));
+
     const result = await generateObject({
       model: googleProvider('gemini-2.5-flash'),
       schema: z.object({
@@ -52,22 +58,33 @@ export async function POST(req) {
           sessionTitle: z.string(),
           contents: z.array(z.object({
             tenBai: z.string(),
-            subItem: z.string(),
             gioLT_used: z.number(),
             gioTH_used: z.number(),
           }))
         }))
       }),
-      prompt: `Bạn là chuyên gia sư phạm. Phân bổ nội dung từ ĐỀ CƯƠNG: ${JSON.stringify(syllabus)} vào các buổi LỊCH TRÌNH: ${JSON.stringify(targetSessions)}. Mỗi buổi PHẢI đủ số tiết pLimit.`,
+      prompt: `Xếp Lịch. Đầu vào: ${JSON.stringify(miniSyllabus)}. Khung rỗng: ${JSON.stringify(targetSessions)}. Khớp tên bài và chia giờ. Output JSON ngắn gọn.`,
     });
 
-    // Trả về JSON một cục luôn, không stream
-    const finalSessions = targetSessions.map((meta, idx) => ({
-      ...meta,
-      id: `session-${idx + 1}`,
-      status: 'pending',
-      ...result.object.sessions[idx]
-    }));
+    // Trả về JSON một cục luôn, không stream. Ánh xạ lại subItem từ syllabus gốc để UI không bị trống.
+    const finalSessions = targetSessions.map((meta, idx) => {
+      const sessionData = result.object.sessions[idx] || { sessionTitle: `Buổi ${idx + 1}`, contents: [] };
+      const enrichedContents = (sessionData.contents || []).map(c => {
+         const original = syllabus.find(s => s.tenBai === c.tenBai);
+         return { 
+           ...c, 
+           subItem: original?.subItem || c.tenBai,
+           lessonName: original?.tenBai || c.tenBai 
+         };
+      });
+      return {
+        ...meta,
+        id: `session-${idx + 1}`,
+        status: 'pending',
+        ...sessionData,
+        contents: enrichedContents
+      };
+    });
 
     return NextResponse.json({ sessions: finalSessions });
 
