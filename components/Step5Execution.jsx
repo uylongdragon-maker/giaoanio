@@ -556,16 +556,21 @@ YÊU CẦU: Tạo lịch buổi học (4 tiết/buổi). Trả về JSON ARRAY: 
                            sessionType === "KIỂM TRA" ? "bg-rose-50 border-rose-100 text-rose-600" :
                            sessionType === "THI" ? "bg-slate-900 border-slate-700 text-white" :
                            "bg-slate-50 border-slate-100 text-slate-500"
-                        }}>
+                         }`}>
                           {sessionType}
                        </div>
                      </div>
                      {loading && previewSession?.id === session.id ? (
                        <Loader2 className="w-4 h-4 text-indigo-500 animate-spin" />
                      ) : (
-                       <Zap className={`w-4 h-4 transition-all ${
-                         session.status === 'completed' ? 'text-emerald-400 scale-110' : 'text-slate-200 group-hover:text-indigo-400'
-                       }`} />
+                       <Zap 
+                         className={
+                           "w-4 h-4 transition-all " + 
+                           (session.status === 'completed' 
+                             ? "text-emerald-400 scale-110" 
+                             : "text-slate-200 group-hover:text-indigo-400")
+                         } 
+                       />
                      )}
                   </div>
                 </div>
