@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import htmlToDocx from 'html-to-docx';
 
+export const maxDuration = 300;
+
 export async function POST(req) {
   try {
     const { html, title } = await req.json();

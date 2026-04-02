@@ -3,7 +3,6 @@ import { google } from '@ai-sdk/google';
 import { generateObject } from 'ai';
 import { z } from 'zod';
 
-export const runtime = 'edge';
 export const maxDuration = 300;
 
 export async function POST(req) {

@@ -3,7 +3,6 @@ import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { z } from 'zod';
 import { NextResponse } from 'next/server';
 
-export const runtime = 'edge';
 export const maxDuration = 300;
 
 // Schema cho từng hàng hoạt động giáo án
