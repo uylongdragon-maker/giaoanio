@@ -49,11 +49,11 @@ export async function POST(req) {
 
     const fullPrompt = `${systemPrompt || ''}\n\nDỮ LIỆU CỤ THỂ:\n${JSON.stringify(formData || {}, null, 2)}`;
 
-    // Chỉ áp dụng Streaming cho mode lesson_json
-    if (mode === 'lesson_json') {
+    // Chỉ áp dụng Streaming cho mode lesson_json hoặc lesson_row
+    if (mode === 'lesson_json' || mode === 'lesson_row') {
       const result = await streamObject({
         model: google(modelName),
-        schema: LessonSchema,
+        schema: mode === 'lesson_row' ? LessonRowSchema : LessonSchema,
         prompt: fullPrompt,
         temperature: 0.7,
       });

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import { X, FileText, Download, CheckCircle2, Calendar, Clock, BookOpen, Bot, Plus, Loader2, RefreshCw, Scale, Zap } from 'lucide-react';
 
 const normalizeTime = (rows, target) => {
@@ -58,6 +58,12 @@ export default function SessionPreviewModal({ isOpen, onClose, session, onReset,
     setEditedActivities([...editedActivities, { segmentTitle: "Hoạt động mới", phut: 15, noi_dung: "", teacherAct: "", studentAct: "" }]);
   };
 
+  const insertActivity = (idx) => {
+    const updated = [...editedActivities];
+    updated.splice(idx + 1, 0, { segmentTitle: "Nội dung mới", phut: 15, noi_dung: "", teacherAct: "", studentAct: "" });
+    setEditedActivities(updated);
+  };
+
   const removeActivity = (idx) => {
     setEditedActivities(editedActivities.filter((_, i) => i !== idx));
   };
@@ -70,6 +76,21 @@ export default function SessionPreviewModal({ isOpen, onClose, session, onReset,
         await onGenerateAI({ ...session, lessonType });
       } catch (err) {
         setError(err.message || 'Lỗi không xác định khi soạn giáo án.');
+      } finally {
+        setGenerating(false);
+      }
+    }
+  };
+
+  const handleGenerateRow = async (idx) => {
+    if (onGenerateAI) {
+      setGenerating(true);
+      setError('');
+      try {
+        // Gửi index để AI biết chỉ cần soạn hàng này
+        await onGenerateAI({ ...session, lessonType, targetRowIndex: idx, currentRows: editedActivities });
+      } catch (err) {
+        setError(err.message || 'Lỗi không xác định khi soạn hàng này.');
       } finally {
         setGenerating(false);
       }
@@ -358,72 +379,98 @@ export default function SessionPreviewModal({ isOpen, onClose, session, onReset,
                   </thead>
                   <tbody className="divide-y divide-slate-100 relative">
                     {editedActivities.map((act, index) => (
-                      <tr key={index} className={`group hover:bg-slate-50 transition-colors ${act.phut > 15 ? 'bg-rose-50/30' : ''}`}>
-                        <td className="px-4 py-4 align-top text-center border-b border-slate-100">
-                          <span className="text-xs font-black text-slate-300">{index + 1}</span>
-                        </td>
-                        <td className="px-4 py-4 align-top space-y-2 border-b border-slate-100">
-                          <div className="flex items-center gap-2">
-                             <input 
-                              type="text"
-                              value={act.segmentTitle || act.noi_dung || ""}
-                              onChange={(e) => handleUpdateActivity(index, 'segmentTitle', e.target.value)}
-                              className="w-full bg-transparent border-none text-slate-900 font-bold text-sm outline-none focus:ring-0 p-0"
-                              placeholder="Tên hoạt động..."
-                            />
-                            {act.phut > 15 && (
-                              <div className="flex items-center gap-1 px-2 py-1 bg-rose-600 text-white text-[9px] font-black rounded-lg animate-bounce shadow-lg shadow-rose-200 whitespace-nowrap">
-                                <Clock className="w-2.5 h-2.5" />
-                                LỐ 15 PHÚT!
-                              </div>
-                            )}
-                          </div>
-                          <textarea 
-                            value={act.noi_dung || ""}
-                            onChange={(e) => handleUpdateActivity(index, 'noi_dung', e.target.value)}
-                            className="w-full bg-transparent border-none text-slate-500 text-xs outline-none focus:ring-0 p-0 min-h-[40px] resize-none"
-                            placeholder="Mô tả chi tiết..."
-                          />
-                        </td>
-                        {lessonType !== 'Lý thuyết' && (
-                          <>
-                            <td className="px-4 py-4 align-top border-b border-slate-100">
-                              <textarea 
-                                value={act.teacherAct || ""}
-                                onChange={(e) => handleUpdateActivity(index, 'teacherAct', e.target.value)}
-                                className="w-full bg-transparent border-none text-slate-600 text-xs outline-none focus:ring-0 p-0 min-h-[60px] resize-none italic"
-                                placeholder="..."
+                      <Fragment key={index}>
+                        <tr className={`group hover:bg-slate-50 transition-colors ${act.phut > 15 ? 'bg-rose-50/30' : ''}`}>
+                          <td className="px-4 py-4 align-top text-center border-b border-slate-100">
+                            <span className="text-xs font-black text-slate-300">{index + 1}</span>
+                          </td>
+                          <td className="px-4 py-4 align-top space-y-2 border-b border-slate-100">
+                            <div className="flex items-center gap-2">
+                               <input 
+                                type="text"
+                                value={act.segmentTitle || act.noi_dung || ""}
+                                onChange={(e) => handleUpdateActivity(index, 'segmentTitle', e.target.value)}
+                                className="w-full bg-transparent border-none text-slate-900 font-bold text-sm outline-none focus:ring-0 p-0"
+                                placeholder="Tên hoạt động..."
                               />
-                            </td>
-                            <td className="px-4 py-4 align-top border-b border-slate-100">
-                              <textarea 
-                                value={act.studentAct || ""}
-                                onChange={(e) => handleUpdateActivity(index, 'studentAct', e.target.value)}
-                                className="w-full bg-transparent border-none text-slate-600 text-xs outline-none focus:ring-0 p-0 min-h-[60px] resize-none italic"
-                                placeholder="..."
-                              />
-                            </td>
-                          </>
-                        )}
-                        <td className="px-4 py-4 align-top border-b border-slate-100 text-center">
-                          <div className={`inline-flex items-center justify-center gap-1 rounded-lg px-2 py-1 border transition-all ${
-                            act.phut > 15 ? 'bg-rose-100 border-rose-300 text-rose-600 shadow-sm' : 'bg-slate-100 border-slate-200 text-slate-600'
-                          }`}>
-                            <input 
-                              type="number" 
-                              value={act.phut}
-                              onChange={(e) => handleUpdateActivity(index, 'phut', parseInt(e.target.value) || 0)}
-                              className="w-8 bg-transparent border-none text-center font-bold text-xs outline-none focus:ring-0 p-0"
+                              <button 
+                                onClick={() => handleGenerateRow(index)}
+                                disabled={isGenerating || !act.segmentTitle}
+                                className="group/ai p-1.5 rounded-lg bg-indigo-50 text-indigo-500 hover:bg-indigo-600 hover:text-white transition-all opacity-0 group-hover:opacity-100 disabled:opacity-0"
+                                title="AI soạn chi tiết hoạt động này"
+                              >
+                                {isGenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Bot className="w-3 h-3" />}
+                              </button>
+                                
+                              {act.phut > 15 && (
+                                <div className="flex items-center gap-1 px-2 py-1 bg-rose-600 text-white text-[9px] font-black rounded-lg animate-bounce shadow-lg shadow-rose-200 whitespace-nowrap">
+                                  <Clock className="w-2.5 h-2.5" />
+                                  LỐ 15 PHÚT!
+                                </div>
+                              )}
+                            </div>
+                            <textarea 
+                              value={act.noi_dung || ""}
+                              onChange={(e) => handleUpdateActivity(index, 'noi_dung', e.target.value)}
+                              className="w-full bg-transparent border-none text-slate-500 text-xs outline-none focus:ring-0 p-0 min-h-[40px] resize-none"
+                              placeholder="Mô tả chi tiết..."
                             />
-                            <span className="text-[10px] font-black opacity-50">'</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-4 align-top border-b border-slate-100 text-right">
-                          <button onClick={() => removeActivity(index)} className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all opacity-0 group-hover:opacity-100">
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </td>
-                      </tr>
+                          </td>
+                          {lessonType !== 'Lý thuyết' && (
+                            <>
+                              <td className="px-4 py-4 align-top border-b border-slate-100">
+                                <textarea 
+                                  value={act.teacherAct || ""}
+                                  onChange={(e) => handleUpdateActivity(index, 'teacherAct', e.target.value)}
+                                  className="w-full bg-transparent border-none text-slate-600 text-xs outline-none focus:ring-0 p-0 min-h-[60px] resize-none italic"
+                                  placeholder="..."
+                                />
+                              </td>
+                              <td className="px-4 py-4 align-top border-b border-slate-100">
+                                <textarea 
+                                  value={act.studentAct || ""}
+                                  onChange={(e) => handleUpdateActivity(index, 'studentAct', e.target.value)}
+                                  className="w-full bg-transparent border-none text-slate-600 text-xs outline-none focus:ring-0 p-0 min-h-[60px] resize-none italic"
+                                  placeholder="..."
+                                />
+                              </td>
+                            </>
+                          )}
+                          <td className="px-4 py-4 align-top border-b border-slate-100 text-center">
+                            <div className={`inline-flex items-center justify-center gap-1 rounded-lg px-2 py-1 border transition-all ${
+                              act.phut > 15 ? 'bg-rose-100 border-rose-300 text-rose-600 shadow-sm' : 'bg-slate-100 border-slate-200 text-slate-600'
+                            }`}>
+                              <input 
+                                type="number" 
+                                value={act.phut}
+                                onChange={(e) => handleUpdateActivity(index, 'phut', parseInt(e.target.value) || 0)}
+                                className="w-8 bg-transparent border-none text-center font-bold text-xs outline-none focus:ring-0 p-0"
+                              />
+                              <span className="text-[10px] font-black opacity-50">'</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-4 align-top border-b border-slate-100 text-right">
+                            <button onClick={() => removeActivity(index)} className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all opacity-0 group-hover:opacity-100">
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                        {/* Nút chèn hàng trung gian */}
+                        <tr className="group/divider relative h-0">
+                          <td colSpan={lessonType === 'Lý thuyết' ? 4 : 6} className="p-0 border-none relative h-0">
+                            <div className="absolute inset-x-0 -top-3 bottom-[-12px] flex items-center justify-center opacity-0 hover:opacity-100 transition-all z-20 group-hover/divider:scale-y-110">
+                              <button 
+                                onClick={() => insertActivity(index)}
+                                className="w-6 h-6 bg-indigo-600 text-white rounded-full flex items-center justify-center shadow-lg hover:scale-125 transition-all border-2 border-white"
+                                title="Chèn hàng mới vào đây"
+                              >
+                                <Plus className="w-3 h-3" />
+                              </button>
+                              <div className="absolute inset-x-0 h-[1px] bg-indigo-200 -z-10 mx-10"></div>
+                            </div>
+                          </td>
+                        </tr>
+                      </Fragment>
                     ))}
                     {editedActivities.length === 0 && !generating && (
                       <tr>

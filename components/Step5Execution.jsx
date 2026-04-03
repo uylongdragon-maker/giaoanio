@@ -57,6 +57,35 @@ export default function Step5Execution({ aiConfig }) {
     }
   };
 
+  const [pendingRowIndex, setPendingRowIndex] = useState(null);
+
+  const { object: rowObject, submit: submitRow, isLoading: isRowStreaming } = useObject({
+    api: '/api/generate-lesson',
+    schema: LessonRowSchema,
+    onFinish: ({ object: finalRow }) => {
+      if (currentSessionId && pendingRowIndex !== null && finalRow) {
+        const updatedSchedule = activeCourse.schedule.map(s => {
+          if (s.id === currentSessionId) {
+            const newRows = [...(s.generatedLesson?.activities || s.generatedLesson?.lessonRows || [])];
+            newRows[pendingRowIndex] = { ...newRows[pendingRowIndex], ...finalRow };
+            return { ...s, generatedLesson: { ...s.generatedLesson, activities: newRows, lessonRows: newRows } };
+          }
+          return s;
+        });
+        updateActiveCourse({ schedule: updatedSchedule });
+        
+        if (previewSession?.id === currentSessionId) {
+          setPreviewSession(prev => {
+            const newRows = [...(prev.generatedLesson?.activities || prev.generatedLesson?.lessonRows || [])];
+            newRows[pendingRowIndex] = { ...newRows[pendingRowIndex], ...finalRow };
+            return { ...prev, generatedLesson: { ...prev.generatedLesson, activities: newRows, lessonRows: newRows } };
+          });
+        }
+        setPendingRowIndex(null);
+      }
+    }
+  });
+
   const { object, submit, isLoading: isStreaming, error: streamingError } = useObject({
     api: '/api/generate-lesson',
     schema: LessonSchema,
@@ -270,6 +299,32 @@ YÊU CẦU: Tạo lịch buổi học (4 tiết/buổi). Trả về JSON ARRAY: 
       setCurrentSessionId(sessionParam.id);
       setCurrentFinalType(finalType);
       const modelType = aiConfig?.modelType || aiConfig?.model;
+
+      if (sessionParam.targetRowIndex !== undefined) {
+        // GENERATE SINGLE ROW
+        const idx = sessionParam.targetRowIndex;
+        const currentRows = sessionParam.currentRows || [];
+        const rowData = currentRows[idx];
+        setPendingRowIndex(idx);
+        submitRow({
+          apiKey: aiConfig?.apiKey,
+          modelType,
+          mode: 'lesson_row', // Optional mode, route handles it via prompt
+          formData: {
+            context: `Giáo án cho buổi: ${sessionParam.sessionTitle}. Loại: ${finalType}. 
+                     Mục tiêu: ${sessionParam.generatedLesson?.muc_tieu || ""}. 
+                     Hoạt động trước đó: ${idx > 0 ? currentRows[idx-1].segmentTitle : "Bắt đầu"}.`,
+            activityTitle: rowData.segmentTitle,
+            lessonType: finalType
+          },
+          systemPrompt: `BẠN LÀ CHUYÊN GIA BIÊN SOẠN GIÁO ÁN.
+            Hãy soạn CHI TIẾT cho hoạt động: "${rowData.segmentTitle}".
+            Nội dung bao gồm: Mô tả nội dung kiến thức (noi_dung), Hoạt động GV (teacherAct), Hoạt động HS (studentAct).
+            Thời gian (phut) đề xuất (thường 10-20p).
+            CHỈ TRẢ VỀ JSON DUY NHẤT THEO SCHEMA CHO 1 HÀNG, KHÔNG GIẢI THÍCH.`
+        });
+        return;
+      }
 
       if (modelType === 'chrome-nano') {
         const data = await runChromeAI();
@@ -622,7 +677,7 @@ YÊU CẦU: Tạo lịch buổi học (4 tiết/buổi). Trả về JSON ARRAY: 
           onReset={handleResetSession}
           onSave={handleSaveLesson}
           onGenerateAI={(s) => handleGenerateDetailedLesson(s)}
-          isGenerating={isStreaming && currentSessionId === previewSession.id}
+          isGenerating={(isStreaming || isRowStreaming) && currentSessionId === previewSession.id}
         />
       )}
 
