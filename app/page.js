@@ -6,6 +6,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import Header from '@/components/Header';
 import SettingsModal from '@/components/SettingsModal';
+import UserGuideModal from '@/components/UserGuideModal';
 import Login from '@/components/Login';
 import Dashboard from '@/components/Dashboard';
 import Step2Scheduler from '@/components/Step2Scheduler';
@@ -15,7 +16,7 @@ import Step5Execution from '@/components/Step5Execution';
 import useStore from '@/app/store/useStore';
 import { 
   Loader2, LogOut, Sparkles, CheckCircle2, 
-  ChevronRight, Calendar, FileText, Activity, Zap 
+  ChevronRight, Calendar, FileText, Activity, Zap, HelpCircle 
 } from 'lucide-react';
 
 export default function Home() {
@@ -24,6 +25,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [aiConfig, setAiConfig] = useState(null);
   const [showConfig, setShowConfig] = useState(false); 
+  const [showGuide, setShowGuide] = useState(false);
   const [toast, setToast] = useState(null);
 
   const { currentStep, setCurrentStep, activeCourse } = useStore();
@@ -108,6 +110,11 @@ export default function Home() {
         showToast={showToast}
       />
 
+      <UserGuideModal 
+        isOpen={showGuide} 
+        onClose={() => setShowGuide(false)}
+      />
+
       <div className="relative z-10 min-h-screen flex flex-col">
         {/* HEADER */}
         <header className="max-w-7xl mx-auto w-full px-6 pt-8 flex justify-between items-center">
@@ -151,6 +158,9 @@ export default function Home() {
           </div>
 
           <div className="flex items-center gap-4">
+             <button onClick={() => setShowGuide(true)} className="p-3 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/10 transition-all text-slate-400 flex items-center gap-2">
+               <HelpCircle className="w-5 h-5" /> <span className="hidden md:block text-xs font-bold font-black">HƯỚNG DẪN</span>
+             </button>
              <button onClick={() => setShowConfig(true)} className="p-3 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/10 transition-all text-slate-400 flex items-center gap-2">
                <Zap className="w-5 h-5" /> <span className="hidden md:block text-xs font-bold font-black">AI CONFIG</span>
              </button>
