@@ -16,7 +16,7 @@ export function generateTimetable(syllabus, startDate, dayConfigs, holidayList =
   let allBlocks = [];
 
   syllabus.forEach((item, idx) => {
-    // Chỉ có Lý Thuyết (LT) là 45 phút / tiết
+    // Chỉ có Lý thuyết (LT) là 45 phút / tiết
     const hLt = parseFloat(item.gioLT) || 0;
     // TH, KLT, KTH, TLT, TTH đều là 60 phút / giờ -> Scale x 60/45
     const hOthers = (parseFloat(item.gioTH) || 0) + (parseFloat(item.gioKLT) || 0) + (parseFloat(item.gioKTH) || 0) + (parseFloat(item.gioTLT) || 0) + (parseFloat(item.gioTTH) || 0);

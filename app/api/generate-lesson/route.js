@@ -7,11 +7,12 @@ export const maxDuration = 300;
 
 // Schema cho từng hàng hoạt động giáo án
 const LessonRowSchema = z.object({
-  segmentTitle: z.string().describe('Tiêu đề hoạt động (VD: "Ổn định lớp", "1.1. Máy ảnh là gì?")'),
-  phut: z.number().describe('Thời lượng (Số nguyên phút)'),
-  noi_dung: z.string().describe('Tóm tắt nội dung kiến thức'),
-  teacherAct: z.string().describe('Hoạt động CHI TIẾT của Giáo viên (Dùng số thứ tự 1, 2, 3...)'),
-  studentAct: z.string().describe('Hoạt động CHI TIẾT của Học sinh (Dùng số thứ tự 1, 2, 3...)'),
+  segmentTitle: z.string().describe('Tiêu đề hoạt động (VD: "Ổn định lớp", "1. Giảng bài mới")'),
+  phut: z.number().describe('Thời lượng (Số nguyên phút, tối đa 15)'),
+  noiDungChinh: z.string().describe('Tiêu đề lớn của nội dung, VD: "1. Tổng quan về máy ảnh"'),
+  tieuMucCon: z.array(z.string()).describe('Mảng các tiểu mục nhỏ bên trong, VD: ["1.1 Lịch sử phát triển", "1.2 Phân loại máy ảnh"]'),
+  teacherAct: z.string().describe('Hoạt động CHI TIẾT của Giáo viên, dùng đánh số: "1. Bước một\n2. Bước hai"'),
+  studentAct: z.string().describe('Hoạt động CHI TIẾT của Học sinh, dùng đánh số: "1. Bước một\n2. Bước hai"'),
   ghi_chu: z.string().describe('Ghi chú').optional(),
 });
 
@@ -51,10 +52,39 @@ export async function POST(req) {
 
     // Chỉ áp dụng Streaming cho mode lesson_json hoặc lesson_row
     if (mode === 'lesson_json' || mode === 'lesson_row') {
+      // ===== PROMPT "KỶ LUẬT THÉP" =====
+      const totalMinutes = formData?.totalMinutes || 180;
+      const minActivities = Math.max(12, Math.ceil(totalMinutes / 15));
+
+      const FORMAT_RULES = `
+QUY TẮC ĐỊNH DẠNG NỘI DUNG (BẮT BUỘC áp dụng cho mọi trường noi_dung, teacherAct, studentAct):
+F1. PHÂN CẤP SỐ: Dùng cấu trúc "1.\n1.1. ...\n1.2. ..." để thể hiện tiểu mục bên trong một hoạt động lớn.
+F2. XUỐNG DÒNG: Mỗi tiểu mục PHẢI nằm trên một dòng riêng, ngăn cách bằng ký tự \n thực sự trong chuỗi JSON.
+F3. CẤU TRÚC MẪU cho trường noi_dung:\n  "1. Tiêu đề lớn\n1.1. Nội dung nhỏ thứ nhất\n1.2. Nội dung nhỏ thứ hai"
+F4. KHÔNG DÙNG markdown phức tạp (không dùng **, ##, bảng, HTML). Chỉ dùng số thứ tự và ký tự \n.
+F5. teacherAct và studentAct cũng dùng danh sách đánh số: "1. Bước một\n2. Bước hai\n3. Bước ba"`;
+
+      const steelSystemPrompt = mode === 'lesson_json'
+        ? `Bạn là Hệ thống Soạn Giáo án Tự động tuân thủ TUYỆT ĐỐI các quy tắc toán học và cấu trúc sau:
+1. TỔNG THỜI GIAN: Bắt buộc phải khớp chính xác 100% với yêu cầu (đúng ${totalMinutes} phút). Tổng các cột phut PHẢI bằng ${totalMinutes}.
+2. GIỚI HẠN THỜI GIAN: KHÔNG CÓ BẤT KỲ HOẠT ĐỘNG NÀO ĐƯỢC VƯỢT QUÁ 15 PHÚT. Để đạt đủ ${totalMinutes} phút, bạn PHẢI phân rã thành ÍT NHẤT ${minActivities} hoạt động liên tục.
+3. CẤU TRÚC ĐỀ MỤC: Ở mỗi hoạt động, các đề mục nhỏ PHẢI ĐƯỢC GỘP CHUNG vào cùng một ô nội dung. KHÔNG được chẻ mỗi đề mục nhỏ thành một hàng (row) riêng biệt trên bảng.
+4. LOGIC SƯ PHẠM: Xây dựng chuỗi hoạt động hợp lý: Ổn định lớp (3–5p) → Kiểm tra bài cũ (5–10p) → Giảng lý thuyết (nhiều bước nhỏ ≤15p mỗi bước) → Đưa ví dụ → Học sinh làm nháp → Chữa bài → Thực hành → Củng cố → Dặn dò.
+5. OUTPUT: Chỉ trả về JSON hợp lệ theo schema được cung cấp. KHÔNG giải thích thêm.
+${FORMAT_RULES}`
+        : `${systemPrompt || ''}\n${FORMAT_RULES}`;
+
+      const steelPrompt = mode === 'lesson_json'
+        ? `Dữ liệu đầu vào: Lịch trình buổi học gồm ${totalMinutes} phút (tổng bắt buộc = ${totalMinutes} phút).
+Nội dung cần dạy: ${JSON.stringify(formData?.topics || formData?.contents || formData || {})}.
+Hãy phân bổ thời gian (max 15p/hoạt động, ít nhất ${minActivities} hoạt động), gom các ý nhỏ vào chung một mục và trình bày nội dung theo phân cấp số (1. / 1.1. / 1.2.) với ký tự xuống dòng \n giữa các mục.`
+        : fullPrompt;
+
       const result = await streamObject({
         model: google(modelName),
         schema: mode === 'lesson_row' ? LessonRowSchema : LessonSchema,
-        prompt: fullPrompt,
+        system: steelSystemPrompt,
+        prompt: steelPrompt,
         temperature: 0.7,
       });
 

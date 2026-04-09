@@ -8,11 +8,13 @@ import { experimental_useObject as useObject } from '@ai-sdk/react';
 import { z } from 'zod';
 import { auth, db } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { generateScheduleAlgorithm } from '@/app/utils/scheduleAlgorithm';
 
 const LessonRowSchema = z.object({
   segmentTitle: z.string(),
   phut: z.number(),
-  noi_dung: z.string(),
+  noiDungChinh: z.string(),
+  tieuMucCon: z.array(z.string()),
   teacherAct: z.string(),
   studentAct: z.string(),
   ghi_chu: z.string().optional(),
@@ -208,64 +210,38 @@ export default function Step5Execution({ aiConfig }) {
     }
   };
 
-  const handleGenerateSchedule = async () => {
+  const handleGenerateSchedule = () => {
     setLoading(true);
     setError('');
-    const runChromeAISchedule = async () => {
-      if (!window.ai?.languageModel) {
-        throw new Error("Chrome Built-in AI chưa được kích hoạt. Vui lòng bật cờ 'Built-in AI' trong chrome://flags.");
-      }
-      const session = await window.ai.languageModel.create();
-      const prompt = `HÃY LÀ CHUYÊN GIA LẬP LỊCH GIÁO DỤC.
-DỮ LIỆU: ${JSON.stringify({
-        syllabus: activeCourse.syllabus,
-        startDate: activeCourse.startDate,
-        dayConfigs: activeCourse.dayConfigs,
-        holidays: activeCourse.holidayList
-      })}
-YÊU CẦU: Tạo lịch buổi học (4 tiết/buổi). Trả về JSON ARRAY: [{ "id": string, "date": "YYYY-MM-DD", "sessionTitle": string, "totalPeriods": number, "contents": [{ "subItem": string, "gioLT_used": number, "gioTH_used": number }] }]`;
-      const result = await session.prompt(prompt);
-      const jsonMatch = result.match(/\[[\s\S]*\]/);
-      return JSON.parse(jsonMatch ? jsonMatch[0] : result);
-    };
-
     try {
-      const modelId = aiConfig?.modelType || aiConfig?.model || 'gemini-1.5-flash-002';
-      
-      if (modelId === 'chrome-nano') {
-        const sessions = await runChromeAISchedule();
-        updateActiveCourse({ schedule: sessions });
-        return;
+      if (!activeCourse.syllabus || activeCourse.syllabus.length === 0) {
+        throw new Error('Chưa có đề cương. Hãy quay lại Bước 3 để tải file phân phối chương trình.');
+      }
+      if (!activeCourse.startDate) {
+        throw new Error('Chưa có ngày bắt đầu. Hãy quay lại Bước 2 để thiết lập lịch.');
+      }
+      const hasDayConfig = Object.values(activeCourse.dayConfigs || {}).some(v => v > 0);
+      if (!hasDayConfig) {
+        throw new Error('Chưa cấu hình thứ dạy trong tuần. Hãy quay lại Bước 2.');
       }
 
-       const res = await fetch('/api/schedule-ai', {
-         method: 'POST',
-         headers: { 'Content-Type': 'application/json' },
-         body: JSON.stringify({
-           syllabus: activeCourse.syllabus,
-           startDate: activeCourse.startDate,
-           dayConfigs: activeCourse.dayConfigs,
-           holidayList: activeCourse.holidayList,
-           apiKey: aiConfig?.apiKey,
-           modelId,
-         })
-       });
- 
+      // ==== THUẬT TOÁN LÕI — PURE JS, TỨC THỜI ====
+      console.time('⚡ scheduleAlgorithm');
+      const sessions = generateScheduleAlgorithm(
+        activeCourse.syllabus,
+        activeCourse.startDate,
+        activeCourse.dayConfigs,
+        activeCourse.holidayList || [],
+        4 // 4 tiết = 180p/buổi
+      );
+      console.timeEnd('⚡ scheduleAlgorithm');
+      console.log(`✅ Đã xếp ${sessions.length} buổi học (0 AI Quota used)`);
 
-      if (!res.ok) {
-        const data = await res.json();
-        const msg = data.error || '';
-        if (msg.includes('CẠN KIỆT AI') && window.ai?.languageModel) {
-           console.log("ULTIMATE FALLBACK (SCHEDULER): API failed. Trying Chrome Nano...");
-           const sessions = await runChromeAISchedule();
-           updateActiveCourse({ schedule: sessions });
-        } else {
-           throw new Error(msg || 'Lỗi xếp lịch AI');
-        }
-      } else {
-        const data = await res.json();
-        updateActiveCourse({ schedule: data.sessions });
+      if (sessions.length === 0) {
+        throw new Error('Thuật toán không tạo được buổi nào. Kiểm tra lại đề cương và cấu hình ngày dạy.');
       }
+
+      updateActiveCourse({ schedule: sessions });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -286,13 +262,13 @@ YÊU CẦU: Tạo lịch buổi học (4 tiết/buổi). Trả về JSON ARRAY: 
 
       let finalType = sessionParam.lessonType;
       if (!finalType || finalType === 'Tự động') {
-        if (totalLT > 0 && totalTH > 0) finalType = 'Tích hợp';
-        else if (totalTH > 0) finalType = 'Thực hành';
-        else finalType = 'Lý thuyết';
+        if (totalLT > 0 && totalTH > 0) finalType = 'Tích hợp';
+        else if (totalTH > 0) finalType = 'Thực hành';
+        else finalType = 'Lý thuyết';
       }
 
-      const typeKey = finalType.includes('Tích hợp') || finalType.includes('Tích hợp') ? 'integrated' : 
-                      finalType.includes('Thực hành') || finalType.includes('Thực hành') ? 'practice' : 'theory';
+      const typeKey = finalType.includes('Tích hợp') || finalType.includes('Tích hợp') ? 'integrated' : 
+                      finalType.includes('Thực hành') || finalType.includes('Thực hành') ? 'practice' : 'theory';
       
       const template = (activeCourse.lessonTemplates || {})[typeKey] || "";
 
@@ -543,25 +519,50 @@ YÊU CẦU: Tạo lịch buổi học (4 tiết/buổi). Trả về JSON ARRAY: 
               
               const processedContents = safeContents.map(c => {
                 const name = (c.subItem || "").toLowerCase();
-                let type = c.type || 'Lý thuyết';
+                let type = c.type || 'Lý thuyết';
                 
                 const isExam = name.includes("kiểm tra") || name.includes("thi") || name.includes("test") || name.includes("quiz");
                 if (isExam) {
-                  type = 'Thực hành';
+                  type = 'Thực hành';
                 }
                 return { ...c, type };
               });
 
-              const totalLT = (session.contents || []).reduce((sum, c) => sum + (Number(c.gioLT_used) || 0), 0);
-              const totalTH = (session.contents || []).reduce((sum, c) => sum + (Number(c.gioTH_used) || 0), 0);
-              const totalKT = (session.contents || []).reduce((sum, c) => sum + (Number(c.gioKT_used) || 0), 0);
-              const totalThi = (session.contents || []).reduce((sum, c) => sum + (Number(c.gioThi_used) || 0), 0);
-              
-              let sessionType = "LÝ THUYẾT";
-              if (totalTH > 0) sessionType = "THỰC HÀNH";
-              if (totalTH > 0 && totalLT > 0) sessionType = "TÍCH HỢP";
-              if (totalKT > 0) sessionType = "KIỂM TRA"; 
-              if (totalThi > 0) sessionType = "THI";
+              const totalLT  = (session.contents || []).reduce((sum, c) => sum + (Number(c.gioLT_used)  || 0), 0);
+              const totalTH  = (session.contents || []).reduce((sum, c) => sum + (Number(c.gioTH_used)  || 0), 0);
+              const totalKT  = (session.contents || []).reduce((sum, c) => sum + (Number(c.gioKT_used)  || 0) + (Number(c.gioKLT_used) || 0) + (Number(c.gioKTH_used) || 0), 0);
+              const totalThi = (session.contents || []).reduce((sum, c) => sum + (Number(c.gioThi_used) || 0) + (Number(c.gioTLT_used) || 0) + (Number(c.gioTTH_used) || 0), 0);
+
+              // --- PHÂN LOẠI BUỔI HỌC: Ư U TIÊN TỐI ĐA THI → KT → BÌNH THƯỜNG ---
+              let sessionType = 'LÝ THUYẾT';
+              let badgeColor  = 'bg-blue-600';
+
+              if (totalThi > 0) {
+                // Cấp 1: Buổi Thi
+                badgeColor  = 'bg-red-600';
+                if (totalLT > 0 && totalTH === 0)      sessionType = 'THI LÝ THUYẾT';
+                else if (totalTH > 0 && totalLT === 0) sessionType = 'THI THỰC HÀNH';
+                else if (totalLT > 0 && totalTH > 0)   sessionType = 'THI TÍCH HỢP';
+                else                                   sessionType = 'THI';
+              } else if (totalKT > 0) {
+                // Cấp 2: Kiểm tra
+                badgeColor  = 'bg-orange-500';
+                if (totalLT > 0 && totalTH === 0)      sessionType = 'KT LÝ THUYẾT';
+                else if (totalTH > 0 && totalLT === 0) sessionType = 'KT THỰC HÀNH';
+                else                                   sessionType = 'KIỂM TRA';
+              } else {
+                // Cấp 3: Buổi học bình thường
+                if (totalTH > 0 && totalLT === 0) {
+                  sessionType = 'THỰC HÀNH';
+                  badgeColor  = 'bg-emerald-600';
+                } else if (totalTH > 0 && totalLT > 0) {
+                  sessionType = 'TÍCH HỢP';
+                  badgeColor  = 'bg-indigo-600';
+                } else {
+                  sessionType = 'LÝ THUYẾT';
+                  badgeColor  = 'bg-blue-600';
+                }
+              }
 
               return (
                 <div 
@@ -578,14 +579,8 @@ YÊU CẦU: Tạo lịch buổi học (4 tiết/buổi). Trả về JSON ARRAY: 
                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">{session.date ? new Date(session.date + 'T00:00:00').toLocaleDateString('vi-VN') : '---'}</p>
                        <div className="flex items-center gap-2">
                          <p className="text-xs font-black text-slate-900 uppercase">Buổi {idx + 1}</p>
-                         <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full border ${
-                            sessionType === 'TÍCH HỢP' || sessionType === 'TÍCH HỢP' ? 'bg-indigo-600 text-white border-indigo-600' :
-                            (sessionType === 'THỰC HÀNH' || sessionType === 'THỰC HÀNH') ? 'bg-amber-500 text-white border-amber-500' :
-                            sessionType === 'KIỂM TRA' ? 'bg-rose-600 text-white border-rose-600' :
-                            sessionType === 'THI' ? 'bg-black text-white border-black' :
-                            'bg-slate-800 text-white border-slate-800'
-                         }`}>
-                            {sessionType}
+                         <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full text-white ${badgeColor}`}>
+                             {sessionType}
                          </span>
                        </div>
                      </div>
@@ -633,14 +628,8 @@ YÊU CẦU: Tạo lịch buổi học (4 tiết/buổi). Trả về JSON ARRAY: 
                   <div className="mt-auto pt-4 border-t border-slate-100 flex items-center justify-between">
                      <div className="flex flex-col gap-1">
                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-1">{session.totalPeriods || 4} TIẾT (180P)</span>
-                        <div className={`text-[9px] font-black uppercase px-2 py-1 rounded-lg border transition-all ${
-                           sessionType === "TÍCH HỢP" || sessionType === "TÍCH HỢP" ? "bg-indigo-50 border-indigo-100 text-indigo-600" :
-                           (sessionType === "THỰC HÀNH" || sessionType === "THỰC HÀNH") ? "bg-amber-50 border-amber-100 text-amber-600" :
-                           sessionType === "KIỂM TRA" ? "bg-rose-50 border-rose-100 text-rose-600" :
-                           sessionType === "THI" ? "bg-slate-900 border-slate-700 text-white" :
-                           "bg-slate-50 border-slate-100 text-slate-500"
-                         }`}>
-                          {sessionType}
+                       <div className={`text-[9px] font-black uppercase px-2 py-1 rounded-lg text-white transition-all ${badgeColor}`}>
+                         {sessionType}
                        </div>
                      </div>
                      {loading && previewSession?.id === session.id ? (

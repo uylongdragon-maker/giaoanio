@@ -17,7 +17,7 @@ const normalizeTime = (rows, target) => {
 export default function SessionPreviewModal({ isOpen, onClose, session, onReset, onSave, onGenerateAI, isGenerating: isGeneratingProp }) {
   const [editedObjective, setEditedObjective] = useState('');
   const [editedActivities, setEditedActivities] = useState([]);
-  const [lessonType, setLessonType] = useState('Lý thuyết'); // 'Lý thuyết', 'Thực hành', 'Tích hợp'
+  const [lessonType, setLessonType] = useState('Lý thuyết'); // 'Lý thuyết', 'Thực hành', 'Tích hợp'
   const [generating, setGenerating] = useState(false);
   const isGenerating = isGeneratingProp || generating;
   const [error, setError] = useState('');
@@ -37,10 +37,10 @@ export default function SessionPreviewModal({ isOpen, onClose, session, onReset,
     const totalKT = (session.contents || []).reduce((sum, c) => sum + (Number(c.gioKT_used) || 0), 0);
     const totalThi = (session.contents || []).reduce((sum, c) => sum + (Number(c.gioThi_used) || 0), 0);
     
-    let finalType = 'LÝ THUẾT';
-    if (totalTH > 0) finalType = 'THỰC HÀNH';
-    if (totalTH > 0 && totalLT > 0) finalType = 'TÍCH HỢP';
-    if (totalKT > 0) finalType = 'KIỂM TRA';
+    let finalType = 'LÝ THUYẾT';
+    if (totalTH > 0) finalType = 'THỰC HÀNH';
+    if (totalTH > 0 && totalLT > 0) finalType = 'TÍCH HỢP';
+    if (totalKT > 0) finalType = 'KIỂM TRA';
     if (totalThi > 0) finalType = 'THI';
     
     setLessonType(finalType);
@@ -51,6 +51,35 @@ export default function SessionPreviewModal({ isOpen, onClose, session, onReset,
   const handleUpdateActivity = (idx, field, value) => {
     const updated = [...editedActivities];
     updated[idx] = { ...updated[idx], [field]: value };
+    setEditedActivities(updated);
+  };
+
+  // --- Handlers cho Khối cha-con (Nested Blocks) ---
+  const handleMainContentChange = (rowIndex, value) => {
+    const updated = [...editedActivities];
+    updated[rowIndex] = { ...updated[rowIndex], noiDungChinh: value };
+    setEditedActivities(updated);
+  };
+
+  const handleSubItemChange = (rowIndex, subIndex, value) => {
+    const updated = [...editedActivities];
+    const subs = [...(updated[rowIndex].tieuMucCon || [])];
+    subs[subIndex] = value;
+    updated[rowIndex] = { ...updated[rowIndex], tieuMucCon: subs };
+    setEditedActivities(updated);
+  };
+
+  const addSubItem = (rowIndex) => {
+    const updated = [...editedActivities];
+    const subs = [...(updated[rowIndex].tieuMucCon || []), 'Tiểu mục mới'];
+    updated[rowIndex] = { ...updated[rowIndex], tieuMucCon: subs };
+    setEditedActivities(updated);
+  };
+
+  const removeSubItem = (rowIndex, subIndex) => {
+    const updated = [...editedActivities];
+    const subs = (updated[rowIndex].tieuMucCon || []).filter((_, i) => i !== subIndex);
+    updated[rowIndex] = { ...updated[rowIndex], tieuMucCon: subs };
     setEditedActivities(updated);
   };
 
@@ -115,26 +144,35 @@ export default function SessionPreviewModal({ isOpen, onClose, session, onReset,
 
   const handleExportWord = () => {
     try {
-      const isTheory = lessonType.normalize('NFC') === 'Lý thuyết'.normalize('NFC');
+      const isTheory = lessonType === 'Lý thuyết';
       
-      const rowsHtml = editedActivities.map((row, i) => `
+      const rowsHtml = editedActivities.map((row, i) => {
+        // Hỗ trợ cả format mới (noiDungChinh + tieuMucCon) lẫn format cũ (noi_dung)
+        const contentHtml = row.noiDungChinh
+          ? `<b>${row.noiDungChinh}</b>` +
+            (row.tieuMucCon?.length
+              ? '<br/>' + row.tieuMucCon.map(s => `&nbsp;&nbsp;&ndash; ${s}`).join('<br/>')
+              : '')
+          : (row.noi_dung || '').replace(/\n/g, '<br/>');
+
+        return `
         <tr style="min-height: 40px;">
           <td align="center" style="border: 1px solid black; padding: 10px;">${i + 1}</td>
           <td style="border: 1px solid black; padding: 10px;">
-            <b>${row.segmentTitle || ""}</b><br/>
-            <span style="font-size: 10pt;">${row.noi_dung || ""}</span>
+            <b>${row.segmentTitle || ''}</b><br/>
+            <span style="font-size: 10pt;">${contentHtml}</span>
           </td>
-          <td style="border: 1px solid black; padding: 10px;">${row.teacherAct || ""}</td>
-          <td style="border: 1px solid black; padding: 10px;">${row.studentAct || ""}</td>
+          <td style="border: 1px solid black; padding: 10px;">${(row.teacherAct || '').replace(/\n/g, '<br/>')}</td>
+          <td style="border: 1px solid black; padding: 10px;">${(row.studentAct || '').replace(/\n/g, '<br/>')}</td>
           <td align="center" style="border: 1px solid black; padding: 10px;">${row.phut || 0}</td>
           <td style="border: 1px solid black; padding: 10px;"></td>
-        </tr>
-      `).join('');
+        </tr>`;
+      }).join('');
 
       const contentHtml = `
         <div style="text-align: center; margin-bottom: 20px;">
           <h2 style="margin: 0; font-family: 'Times New Roman';">GIÁO ÁN: ${ (session.sessionTitle || lessonType).toUpperCase() }</h2>
-          <p style="margin: 5px; font-family: 'Times New Roman'; font-size: 11pt;"><i>(Kèm theo mẫu ${isTheory ? 'Phụ lục 10' : lessonType.normalize('NFC') === 'Thực hành'.normalize('NFC') ? 'Phụ lục 11' : 'Phụ lục 12'})</i></p>
+          <p style="margin: 5px; font-family: 'Times New Roman'; font-size: 11pt;"><i>(Kèm theo mẫu ${isTheory ? 'Phụ lục 10' : lessonType === 'Thực hành' ? 'Phụ lục 11' : 'Phụ lục 12'})</i></p>
         </div>
 
         ${(!session.sessionTitle?.toLowerCase().includes("kiểm tra") && !session.sessionTitle?.toLowerCase().includes("thi")) ? `
@@ -149,13 +187,6 @@ export default function SessionPreviewModal({ isOpen, onClose, session, onReset,
         </div>
 
         <p style="font-family: 'Times New Roman';"><b>II. NỘI DUNG CHI TIẾT:</b></p>
-        
-        {isGenerating && (
-          <div className="flex items-center gap-2 mb-3 bg-amber-50 text-amber-600 px-4 py-2 rounded-xl text-xs font-bold animate-pulse border border-amber-100 italic">
-            <Zap className="w-3 h-3" />
-            ĐANG ĐỒNG BỘ LUỒNG AI (REAL-TIME)...
-          </div>
-        )}
 
         <table border="1" style="border-collapse: collapse; width: 100%; font-family: 'Times New Roman'; font-size: 10pt;">
           <thead>
@@ -218,9 +249,9 @@ export default function SessionPreviewModal({ isOpen, onClose, session, onReset,
                 {session.sessionTitle || Array.from(new Set(session.contents.map(c => c.lessonName).filter(Boolean))).join(' & ')}
               </h2>
               <span className={`text-[10px] font-black uppercase px-3 py-1 rounded-full border shadow-sm ${
-                (lessonType === 'TÍCH HỢP' || lessonType === 'TÍCH HỢP') ? 'bg-indigo-600 text-white border-indigo-600' :
-                (lessonType === 'THỰC HÀNH' || lessonType === 'THỰC HÀNH') ? 'bg-amber-500 text-white border-amber-500' :
-                (lessonType === 'KIỂM TRA' || lessonType === 'KIỂM TRA') ? 'bg-rose-600 text-white border-rose-600' :
+                lessonType === 'TÍCH HỢP' ? 'bg-indigo-600 text-white border-indigo-600' :
+                lessonType === 'THỰC HÀNH' ? 'bg-amber-500 text-white border-amber-500' :
+                lessonType === 'KIỂM TRA' ? 'bg-rose-600 text-white border-rose-600' :
                 lessonType === 'THI' ? 'bg-black text-white border-black' :
                 'bg-slate-800 text-white border-slate-800'
               }`}>
@@ -276,7 +307,7 @@ export default function SessionPreviewModal({ isOpen, onClose, session, onReset,
            <div className="flex items-center gap-4">
              <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Loại giáo án:</span>
              <div className="bg-white p-1 rounded-xl border border-indigo-100 flex gap-1 shadow-sm">
-               {['Lý thuyết', 'Thực hành', 'Tích hợp'].map((t) => (
+               {['Lý thuyết', 'Thực hành', 'Tích hợp'].map((t) => (
                  <button
                    key={t}
                    onClick={() => setLessonType(t)}
@@ -292,7 +323,7 @@ export default function SessionPreviewModal({ isOpen, onClose, session, onReset,
              </div>
            </div>
            <p className="text-[10px] font-bold text-indigo-400 italic">
-             * {lessonType === 'Lý thuyết' ? 'Mẫu Phụ lục 10' : lessonType === 'Thực hành' ? 'Mẫu Phụ lục 11' : 'Mẫu Phụ lục 12'}
+             * {lessonType === 'Lý thuyết' ? 'Mẫu Phụ lục 10' : lessonType === 'Thực hành' ? 'Mẫu Phụ lục 11' : 'Mẫu Phụ lục 12'}
            </p>
         </div>
 
@@ -340,7 +371,7 @@ export default function SessionPreviewModal({ isOpen, onClose, session, onReset,
                   <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center">
                     <FileText className="w-4 h-4 text-indigo-600" />
                   </div>
-                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest text-slate-900">II. Nội dung chi tiết ({lessonType === 'Lý thuyết' ? 'PL10' : lessonType === 'Thực hành' ? 'PL11' : 'PL12'})</h3>
+                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest text-slate-900">II. Nội dung chi tiết ({lessonType === 'Lý thuyết' ? 'PL10' : lessonType === 'Thực hành' ? 'PL11' : 'PL12'})</h3>
                 </div>
                 <div className="flex gap-2">
                   <button 
@@ -365,108 +396,154 @@ export default function SessionPreviewModal({ isOpen, onClose, session, onReset,
                 <table className="w-full text-left border-separate border-spacing-0">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200">
-                      <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest w-12 text-center border-b border-slate-200">STT</th>
-                      <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest min-w-[200px] border-b border-slate-200">Nội dung hoạt động</th>
-                      {lessonType !== 'Lý thuyết' && (
-                        <>
-                          <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest min-w-[150px] border-b border-slate-200">Hoạt động GV</th>
-                          <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest min-w-[150px] border-b border-slate-200">Hoạt động HS</th>
-                        </>
-                      )}
-                      <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest w-24 text-center border-b border-slate-200">Thời gian</th>
-                      <th className="px-4 py-3 w-10 border-b border-slate-200"></th>
+                      <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest w-10 text-center border-b border-slate-200">STT</th>
+                      <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest min-w-[180px] border-b border-slate-200">Nội dung hoạt động</th>
+                      <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest min-w-[160px] border-b border-slate-200">Hoạt động GV</th>
+                      <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest min-w-[160px] border-b border-slate-200">Hoạt động HS</th>
+                      <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest w-20 text-center border-b border-slate-200">Thời gian</th>
+                      <th className="px-4 py-3 w-28 text-center border-b border-slate-200 text-[10px] font-black text-slate-400 uppercase tracking-widest">Thao tác</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 relative">
                     {editedActivities.map((act, index) => (
                       <Fragment key={index}>
-                        <tr className={`group hover:bg-slate-50 transition-colors ${act.phut > 15 ? 'bg-rose-50/30' : ''}`}>
-                          <td className="px-4 py-4 align-top text-center border-b border-slate-100">
+                        <tr className={`group hover:bg-indigo-50/20 transition-colors ${act.phut > 15 ? 'bg-rose-50/30' : ''}`}>
+                          {/* STT */}
+                          <td className="px-3 py-3 align-top text-center border-b border-slate-100 w-10">
                             <span className="text-xs font-black text-slate-300">{index + 1}</span>
                           </td>
-                          <td className="px-4 py-4 align-top space-y-2 border-b border-slate-100">
-                            <div className="flex items-center gap-2">
-                               <input 
+
+                          {/* Nội dung hoạt động */}
+                          <td className="px-3 py-3 align-top space-y-1.5 border-b border-slate-100">
+                            <div className="flex items-center gap-1.5">
+                              <input
                                 type="text"
-                                value={act.segmentTitle || act.noi_dung || ""}
+                                value={act.segmentTitle || ""}
                                 onChange={(e) => handleUpdateActivity(index, 'segmentTitle', e.target.value)}
-                                className="w-full bg-transparent border-none text-slate-900 font-bold text-sm outline-none focus:ring-0 p-0"
+                                className="flex-1 bg-white border border-slate-200 rounded-lg px-2 py-1 text-slate-900 font-bold text-xs outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-all"
                                 placeholder="Tên hoạt động..."
                               />
-                              <button 
+                              <button
                                 onClick={() => handleGenerateRow(index)}
                                 disabled={isGenerating || !act.segmentTitle}
-                                className="group/ai p-1.5 rounded-lg bg-indigo-50 text-indigo-500 hover:bg-indigo-600 hover:text-white transition-all opacity-0 group-hover:opacity-100 disabled:opacity-0"
+                                className="shrink-0 p-1.5 rounded-lg bg-indigo-50 text-indigo-500 hover:bg-indigo-600 hover:text-white transition-all disabled:opacity-30"
                                 title="AI soạn chi tiết hoạt động này"
                               >
                                 {isGenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Bot className="w-3 h-3" />}
                               </button>
-                                
                               {act.phut > 15 && (
-                                <div className="flex items-center gap-1 px-2 py-1 bg-rose-600 text-white text-[9px] font-black rounded-lg animate-bounce shadow-lg shadow-rose-200 whitespace-nowrap">
-                                  <Clock className="w-2.5 h-2.5" />
-                                  LỐ 15 PHÚT!
+                                <div className="flex items-center gap-1 px-1.5 py-0.5 bg-rose-600 text-white text-[8px] font-black rounded-md whitespace-nowrap">
+                                  <Clock className="w-2 h-2" /> LỐ!
                                 </div>
                               )}
                             </div>
-                            <textarea 
-                              value={act.noi_dung || ""}
-                              onChange={(e) => handleUpdateActivity(index, 'noi_dung', e.target.value)}
-                              className="w-full bg-transparent border-none text-slate-500 text-xs outline-none focus:ring-0 p-0 min-h-[40px] resize-none"
-                              placeholder="Mô tả chi tiết..."
-                            />
-                          </td>
-                          {lessonType !== 'Lý thuyết' && (
-                            <>
-                              <td className="px-4 py-4 align-top border-b border-slate-100">
-                                <textarea 
-                                  value={act.teacherAct || ""}
-                                  onChange={(e) => handleUpdateActivity(index, 'teacherAct', e.target.value)}
-                                  className="w-full bg-transparent border-none text-slate-600 text-xs outline-none focus:ring-0 p-0 min-h-[60px] resize-none italic"
-                                  placeholder="..."
-                                />
-                              </td>
-                              <td className="px-4 py-4 align-top border-b border-slate-100">
-                                <textarea 
-                                  value={act.studentAct || ""}
-                                  onChange={(e) => handleUpdateActivity(index, 'studentAct', e.target.value)}
-                                  className="w-full bg-transparent border-none text-slate-600 text-xs outline-none focus:ring-0 p-0 min-h-[60px] resize-none italic"
-                                  placeholder="..."
-                                />
-                              </td>
-                            </>
-                          )}
-                          <td className="px-4 py-4 align-top border-b border-slate-100 text-center">
-                            <div className={`inline-flex items-center justify-center gap-1 rounded-lg px-2 py-1 border transition-all ${
-                              act.phut > 15 ? 'bg-rose-100 border-rose-300 text-rose-600 shadow-sm' : 'bg-slate-100 border-slate-200 text-slate-600'
-                            }`}>
-                              <input 
-                                type="number" 
-                                value={act.phut}
-                                onChange={(e) => handleUpdateActivity(index, 'phut', parseInt(e.target.value) || 0)}
-                                className="w-8 bg-transparent border-none text-center font-bold text-xs outline-none focus:ring-0 p-0"
+                            {/* Khối cha-con: Tiêu đề chính + Tiểu mục con */}
+                            <div className="space-y-1.5">
+                              {/* Input tiêu đề chính */}
+                              <input
+                                type="text"
+                                value={act.noiDungChinh || act.noi_dung || ''}
+                                onChange={(e) => handleMainContentChange(index, e.target.value)}
+                                className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-slate-800 font-bold text-xs outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-all"
+                                placeholder="Tiêu đề nội dung, VD: 1. Tổng quan..."
                               />
-                              <span className="text-[10px] font-black opacity-50">'</span>
+
+                              {/* Danh sách tiểu mục con */}
+                              <div className="pl-3 border-l-2 border-indigo-100 space-y-1 mt-1">
+                                {(act.tieuMucCon || []).map((sub, subIdx) => (
+                                  <div key={subIdx} className="flex items-center gap-1 group/sub">
+                                    <span className="text-indigo-300 text-[10px] font-black shrink-0">{subIdx + 1}.</span>
+                                    <input
+                                      type="text"
+                                      value={sub}
+                                      onChange={(e) => handleSubItemChange(index, subIdx, e.target.value)}
+                                      className="flex-1 bg-indigo-50/50 border border-indigo-100 rounded px-2 py-0.5 text-slate-600 text-xs outline-none focus:ring-1 focus:ring-indigo-300 transition-all"
+                                    />
+                                    <button
+                                      onClick={() => removeSubItem(index, subIdx)}
+                                      className="shrink-0 w-4 h-4 flex items-center justify-center text-slate-300 hover:text-rose-500 opacity-0 group-hover/sub:opacity-100 transition-all rounded"
+                                      title="Xóa tiểu mục"
+                                    >
+                                      <X className="w-2.5 h-2.5" />
+                                    </button>
+                                  </div>
+                                ))}
+
+                                {/* Nút thêm tiểu mục con */}
+                                <button
+                                  onClick={() => addSubItem(index)}
+                                  className="flex items-center gap-1 text-[9px] text-indigo-400 hover:text-indigo-600 font-black uppercase tracking-wider mt-0.5 transition-colors"
+                                >
+                                  <Plus className="w-2.5 h-2.5" /> Thêm tiểu mục
+                                </button>
+                              </div>
                             </div>
                           </td>
-                          <td className="px-4 py-4 align-top border-b border-slate-100 text-right">
-                            <button onClick={() => removeActivity(index)} className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all opacity-0 group-hover:opacity-100">
-                              <X className="w-3.5 h-3.5" />
-                            </button>
+
+                          {/* Hoạt động GV — luôn hiển thị */}
+                          <td className="px-3 py-3 align-top border-b border-slate-100">
+                            <textarea
+                              value={act.teacherAct || ""}
+                              onChange={(e) => {
+                                handleUpdateActivity(index, 'teacherAct', e.target.value);
+                                e.target.style.height = 'auto';
+                                e.target.style.height = e.target.scrollHeight + 'px';
+                              }}
+                              rows={3}
+                              className="w-full bg-slate-50 border border-slate-100 rounded-lg px-2 py-1 text-slate-600 text-xs outline-none focus:ring-2 focus:ring-indigo-300 transition-all resize-none overflow-hidden whitespace-pre-wrap"
+                              placeholder="Giáo viên:\n1. ..."
+                            />
                           </td>
-                        </tr>
-                        {/* Nút chèn hàng trung gian */}
-                        <tr className="group/divider relative h-0">
-                          <td colSpan={lessonType === 'Lý thuyết' ? 4 : 6} className="p-0 border-none relative h-0">
-                            <div className="absolute inset-x-0 -top-3 bottom-[-12px] flex items-center justify-center opacity-0 hover:opacity-100 transition-all z-20 group-hover/divider:scale-y-110">
-                              <button 
+
+                          {/* Hoạt động HS — luôn hiển thị */}
+                          <td className="px-3 py-3 align-top border-b border-slate-100">
+                            <textarea
+                              value={act.studentAct || ""}
+                              onChange={(e) => {
+                                handleUpdateActivity(index, 'studentAct', e.target.value);
+                                e.target.style.height = 'auto';
+                                e.target.style.height = e.target.scrollHeight + 'px';
+                              }}
+                              rows={3}
+                              className="w-full bg-slate-50 border border-slate-100 rounded-lg px-2 py-1 text-slate-600 text-xs outline-none focus:ring-2 focus:ring-indigo-300 transition-all resize-none overflow-hidden whitespace-pre-wrap"
+                              placeholder="Học sinh:\n1. ..."
+                            />
+                          </td>
+
+                          {/* Thời gian */}
+                          <td className="px-3 py-3 align-top border-b border-slate-100 text-center">
+                            <div className={`inline-flex items-center justify-center gap-0.5 rounded-lg px-2 py-1 border transition-all ${
+                              act.phut > 15 ? 'bg-rose-100 border-rose-300 text-rose-600 shadow-sm animate-pulse' : 'bg-white border-slate-200 text-slate-700'
+                            }`}>
+                              <input
+                                type="number"
+                                min={1}
+                                max={15}
+                                value={act.phut || ''}
+                                onChange={(e) => handleUpdateActivity(index, 'phut', parseInt(e.target.value) || 0)}
+                                className="w-9 bg-transparent border-none text-center font-black text-sm outline-none focus:ring-0 p-0"
+                              />
+                              <span className="text-[10px] font-black text-slate-400">p</span>
+                            </div>
+                          </td>
+
+                          {/* Thao tác */}
+                          <td className="px-3 py-3 align-top border-b border-slate-100">
+                            <div className="flex flex-col items-center gap-1.5">
+                              <button
                                 onClick={() => insertActivity(index)}
-                                className="w-6 h-6 bg-indigo-600 text-white rounded-full flex items-center justify-center shadow-lg hover:scale-125 transition-all border-2 border-white"
-                                title="Chèn hàng mới vào đây"
+                                className="flex items-center gap-1 px-2 py-1 bg-indigo-50 hover:bg-indigo-600 text-indigo-500 hover:text-white rounded-lg text-[9px] font-black uppercase tracking-wider transition-all border border-indigo-100 hover:border-indigo-600 whitespace-nowrap"
+                                title="Chèn hàng mới bên dưới"
                               >
-                                <Plus className="w-3 h-3" />
+                                <Plus className="w-2.5 h-2.5" /> Thêm dòng
                               </button>
-                              <div className="absolute inset-x-0 h-[1px] bg-indigo-200 -z-10 mx-10"></div>
+                              <button
+                                onClick={() => removeActivity(index)}
+                                className="flex items-center gap-1 px-2 py-1 bg-slate-50 hover:bg-rose-50 text-slate-300 hover:text-rose-500 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all border border-slate-100 hover:border-rose-200 whitespace-nowrap"
+                                title="Xóa hàng này"
+                              >
+                                <X className="w-2.5 h-2.5" /> Xóa
+                              </button>
                             </div>
                           </td>
                         </tr>
@@ -474,7 +551,7 @@ export default function SessionPreviewModal({ isOpen, onClose, session, onReset,
                     ))}
                     {editedActivities.length === 0 && !generating && (
                       <tr>
-                        <td colSpan={lessonType === 'Lý thuyết' ? 4 : 6} className="px-4 py-12 text-center text-slate-400 italic text-sm">
+                        <td colSpan={6} className="px-4 py-12 text-center text-slate-400 italic text-sm">
                           Chưa có nội dung. Hãy thử bấm "Soạn bằng AI".
                         </td>
                       </tr>
@@ -523,14 +600,16 @@ export default function SessionPreviewModal({ isOpen, onClose, session, onReset,
             </button>
             <button 
               onClick={handleExportWord}
-              disabled={totalMinutes !== targetMinutes || generating}
+              disabled={isGenerating || generating || totalMinutes !== targetMinutes}
               className={`flex-1 md:flex-none px-6 py-3 rounded-2xl font-black text-xs transition-all flex items-center justify-center gap-2 shadow-lg ${
-                (totalMinutes === targetMinutes && !generating)
+                (!isGenerating && !generating && totalMinutes === targetMinutes)
                   ? 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-slate-100' 
-                  : 'bg-slate-50 text-slate-300 border border-slate-100 cursor-not-allowed'
+                  : 'bg-slate-50 text-slate-300 border border-slate-100 cursor-not-allowed opacity-50'
               }`}
             >
-              <Download className="w-4 h-4" /> XUẤT WORD
+              {isGenerating || generating
+                ? <><Loader2 className="w-4 h-4 animate-spin" /> ĐANG SOẠN...</>
+                : <><Download className="w-4 h-4" /> XUẤT WORD</>}
             </button>
             <button 
               onClick={handleSave}
