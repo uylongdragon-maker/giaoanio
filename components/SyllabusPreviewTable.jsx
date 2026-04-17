@@ -117,13 +117,17 @@ export default function SyllabusPreviewTable({ lessons, onConfirm, onCancel, onC
           </tbody>
           <tfoot>
             <tr style="font-weight: bold; background-color: #f9f9f9;">
-              <td colspan="3" align="right">TỔNG CỘNG HỆ SỐ 1.0 (Giờ):</td>
-              <td align="center" colspan="2">${(totalLT + totalOther).toFixed(1)} h</td>
-              <td align="center" colspan="2">${(localLessons.reduce((s,l)=>s+(parseFloat(l.gioKLT)||0)+(parseFloat(l.gioKTH)||0), 0)).toFixed(1)} h</td>
-              <td align="center" colspan="2">${(localLessons.reduce((s,l)=>s+(parseFloat(l.gioTLT)||0)+(parseFloat(l.gioTTH)||0), 0)).toFixed(1)} h</td>
+              <td colspan="2" align="right">TỔNG CỘNG:</td>
+              <td align="center">${(totalLT + totalOther).toFixed(1)}</td>
+              <td align="center">${totalLT.toFixed(1)}</td>
+              <td align="center">${(localLessons.reduce((s,l)=>(s+(parseFloat(l.gioTH)||0)),0)).toFixed(1)}</td>
+              <td align="center">${(localLessons.reduce((s,l)=>(s+(parseFloat(l.gioKLT)||0)),0)).toFixed(1)}</td>
+              <td align="center">${(localLessons.reduce((s,l)=>(s+(parseFloat(l.gioKTH)||0)),0)).toFixed(1)}</td>
+              <td align="center">${(localLessons.reduce((s,l)=>(s+(parseFloat(l.gioTLT)||0)),0)).toFixed(1)}</td>
+              <td align="center">${(localLessons.reduce((s,l)=>(s+(parseFloat(l.gioTTH)||0)),0)).toFixed(1)}</td>
             </tr>
             <tr style="font-weight: bold; color: #4f46e5;">
-              <td colspan="7" align="right">QUY ĐỔI TỔNG TIẾT (LT + Khác*1.33):</td>
+              <td colspan="7" align="right">QUY ĐỔI TỔNG TIẾT (LT + Khác×1.33):</td>
               <td align="center" colspan="2">${Math.round(totalPeriods)} TIẾT</td>
             </tr>
           </tfoot>

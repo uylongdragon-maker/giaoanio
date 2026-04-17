@@ -15,19 +15,20 @@ export async function POST(req) {
     });
 
     const prompt = `Bạn là chuyên gia bóc tách chương trình đào tạo chuyên nghiệp. 
-Nhiệm vụ: Duyệt qua toàn bộ nội dung và trích xuất danh sách các bài học.
+Nhiệm vụ: Duyệt qua toàn bộ nội dung file Đề cương/Tiến độ tải lên và Nhắm thẳng vào bảng "Nội dung và phân phối thời gian" để bóc tách thành mảng JSON chuẩn xác.
+
+TUYỆT ĐỐI KHÔNG SÁNG TẠO HAY THÊM THẮT! Chỉ trích xuất từ văn bản gốc.
 
 YÊU CẦU DỮ LIỆU:
 1. tenBai: Tên bài học hoặc chương lớn.
-2. deMuc: Các tiểu mục chi tiết bên trong (cách nhau bởi dấu phẩy).
-3. gioLT: Số GIỜ lý thuyết nguyên bản.
-4. gioTH: Số GIỜ thực hành/kiểm tra/thi (hệ số 1.0).`;
+2. tieuMuc: Mảng các tiểu mục (Ví dụ: ['1.1 Khái niệm', '1.2 Phân loại']). Nếu không có thì là mảng rỗng [].
+3. tietLT: Số TIẾT lý thuyết (Không phải giờ). (Lưu ý: Nếu bảng ghi là "Giờ" thì mặc định 1 giờ LT = 1 tiết LT. Chỉ ghi nhận số gốc).
+4. tietTH: Số TIẾT thực hành/kiểm tra/thi.`;
 
     let input;
     if (fileData.rawText) {
       input = { prompt: `${prompt}\n\nNội dung cần trích xuất:\n${fileData.rawText}` };
     } else if (fileData.data && fileData.mimeType) {
-      // AI SDK supports multi-modal inputs
       input = {
         prompt,
         messages: [
@@ -45,31 +46,33 @@ YÊU CẦU DỮ LIỆU:
     }
 
     const generateArgs = {
-      model: googleProvider('gemini-1.5-flash'),
+      model: googleProvider('gemini-1.5-pro'),
       schema: z.object({
-        lessons: z.array(z.object({
+        subjectName: z.string().describe("Tên môn học/mô đun"),
+        curriculum: z.array(z.object({
           tenBai: z.string(),
-          deMuc: z.string(),
-          gioLT: z.number(),
-          gioTH: z.number(),
+          tieuMuc: z.array(z.string()).describe("Mảng các tiểu mục (Ví dụ: ['1.1 Khái niệm', '1.2 Phân loại'])"),
+          tietLT: z.number().default(0),
+          tietTH: z.number().default(0)
         }))
       }),
     };
 
-    // Lỗi 3 fix: Truyền đúng prompt hoặc messages tùy theo loại input
     if (fileData.rawText) {
       generateArgs.prompt = input.prompt;
     } else {
-      // PDF/Ảnh: dùng multimodal messages
       generateArgs.messages = input.messages;
     }
 
     const { object } = await generateObject(generateArgs);
 
-    return NextResponse.json({ lessons: object.lessons }, { status: 200 });
+    return NextResponse.json({ 
+      subjectName: object.subjectName, 
+      curriculum: object.curriculum 
+    }, { status: 200 });
 
   } catch (error) {
-    console.error("LỖI API (analyze-file):", error);
+    console.error("LỖI API (parse-document):", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

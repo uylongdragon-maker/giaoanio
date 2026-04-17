@@ -274,58 +274,19 @@ export default function SessionPreviewModal({ isOpen, onClose, session, onReset,
                 {new Date(session.date + 'T00:00:00').toLocaleDateString('vi-VN')}
               </div>
               <div className="flex items-center gap-2">
-                {periods} tiết ({targetMinutes} phút)
+                <Clock className="w-3 h-3 text-slate-400" />
+                {periods} tiết · {totalMinutes}p
               </div>
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <div className="flex flex-col items-end">
-              <div className={`flex items-center gap-2 px-4 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-widest transition-all ${
-                totalMinutes === targetMinutes 
-                  ? 'bg-emerald-50 border-emerald-200 text-emerald-600 shadow-sm' 
-                  : totalMinutes > targetMinutes 
-                    ? 'bg-rose-50 border-rose-200 text-rose-600 animate-pulse' 
-                    : 'bg-amber-50 border-amber-200 text-amber-600'
-              }`}>
-                <Clock className="w-3 h-3" />
-                {totalMinutes} / {targetMinutes} PHÚT
-              </div>
-              {totalMinutes !== targetMinutes && (
-                <span className={`text-[9px] font-black mt-1 uppercase italic ${totalMinutes > targetMinutes ? 'text-rose-500' : 'text-amber-500'}`}>
-                   {totalMinutes > targetMinutes ? `⚠️ LỐ BIÊN ĐỘ: +${totalMinutes - targetMinutes}p` : `⚠️ CHƯA ĐỦ: -${targetMinutes - totalMinutes}p`}
-                </span>
-              )}
-            </div>
             <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-all text-slate-400">
               <X className="w-6 h-6" />
             </button>
           </div>
         </div>
 
-        {/* Lesson Type Selector */}
-        <div className="px-8 py-3 bg-indigo-50/50 border-b border-indigo-100 flex items-center justify-between">
-           <div className="flex items-center gap-4">
-             <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Loại giáo án:</span>
-             <div className="bg-white p-1 rounded-xl border border-indigo-100 flex gap-1 shadow-sm">
-               {['Lý thuyết', 'Thực hành', 'Tích hợp'].map((t) => (
-                 <button
-                   key={t}
-                   onClick={() => setLessonType(t)}
-                   className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${
-                     lessonType === t 
-                       ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' 
-                       : 'text-indigo-400 hover:bg-slate-50'
-                   }`}
-                 >
-                   {t}
-                 </button>
-               ))}
-             </div>
-           </div>
-           <p className="text-[10px] font-bold text-indigo-400 italic">
-             * {lessonType === 'Lý thuyết' ? 'Mẫu Phụ lục 10' : lessonType === 'Thực hành' ? 'Mẫu Phụ lục 11' : 'Mẫu Phụ lục 12'}
-           </p>
-        </div>
+
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar bg-white">
@@ -407,7 +368,7 @@ export default function SessionPreviewModal({ isOpen, onClose, session, onReset,
                   <tbody className="divide-y divide-slate-100 relative">
                     {editedActivities.map((act, index) => (
                       <Fragment key={index}>
-                        <tr className={`group hover:bg-indigo-50/20 transition-colors ${act.phut > 15 ? 'bg-rose-50/30' : ''}`}>
+                        <tr className="group hover:bg-indigo-50/20 transition-colors">
                           {/* STT */}
                           <td className="px-3 py-3 align-top text-center border-b border-slate-100 w-10">
                             <span className="text-xs font-black text-slate-300">{index + 1}</span>
@@ -423,19 +384,6 @@ export default function SessionPreviewModal({ isOpen, onClose, session, onReset,
                                 className="flex-1 bg-white border border-slate-200 rounded-lg px-2 py-1 text-slate-900 font-bold text-xs outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-all"
                                 placeholder="Tên hoạt động..."
                               />
-                              <button
-                                onClick={() => handleGenerateRow(index)}
-                                disabled={isGenerating || !act.segmentTitle}
-                                className="shrink-0 p-1.5 rounded-lg bg-indigo-50 text-indigo-500 hover:bg-indigo-600 hover:text-white transition-all disabled:opacity-30"
-                                title="AI soạn chi tiết hoạt động này"
-                              >
-                                {isGenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Bot className="w-3 h-3" />}
-                              </button>
-                              {act.phut > 15 && (
-                                <div className="flex items-center gap-1 px-1.5 py-0.5 bg-rose-600 text-white text-[8px] font-black rounded-md whitespace-nowrap">
-                                  <Clock className="w-2 h-2" /> LỐ!
-                                </div>
-                              )}
                             </div>
                             {/* Khối cha-con: Tiêu đề chính + Tiểu mục con */}
                             <div className="space-y-1.5">
@@ -512,16 +460,13 @@ export default function SessionPreviewModal({ isOpen, onClose, session, onReset,
 
                           {/* Thời gian */}
                           <td className="px-3 py-3 align-top border-b border-slate-100 text-center">
-                            <div className={`inline-flex items-center justify-center gap-0.5 rounded-lg px-2 py-1 border transition-all ${
-                              act.phut > 15 ? 'bg-rose-100 border-rose-300 text-rose-600 shadow-sm animate-pulse' : 'bg-white border-slate-200 text-slate-700'
-                            }`}>
+                            <div className="inline-flex items-center justify-center gap-0.5 rounded-lg px-3 py-1.5 bg-slate-50 border border-slate-200 text-slate-600">
                               <input
                                 type="number"
                                 min={1}
-                                max={15}
                                 value={act.phut || ''}
                                 onChange={(e) => handleUpdateActivity(index, 'phut', parseInt(e.target.value) || 0)}
-                                className="w-9 bg-transparent border-none text-center font-black text-sm outline-none focus:ring-0 p-0"
+                                className="w-10 bg-transparent border-none text-center font-black text-sm outline-none focus:ring-0 p-0"
                               />
                               <span className="text-[10px] font-black text-slate-400">p</span>
                             </div>

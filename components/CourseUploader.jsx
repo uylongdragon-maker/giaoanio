@@ -79,6 +79,7 @@ Nội dung: ${text}`;
         return { lessons };
       };
 
+      let data = {};
       if (modelId === 'chrome-nano') {
         if (!rawText) throw new Error("Chrome Nano chỉ hỗ trợ đọc trực tiếp văn bản (Word/Text). Vui lòng dùng Gemini cho PDF/Ảnh.");
         data = await runChromeAIAnalyze(rawText);

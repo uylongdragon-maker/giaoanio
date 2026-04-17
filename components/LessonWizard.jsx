@@ -7,7 +7,8 @@ import ExportButtons from '@/components/ExportButtons';
 import AssistantChat from '@/components/AssistantChat';
 import CompetencySelector from '@/components/CompetencySelector';
 import SimulationBox from '@/components/SimulationBox';
-import { Sparkles, ChevronRight, ChevronLeft, Bot, Loader2, CheckCircle2, FileText, MonitorSmartphone, Cpu, Presentation, ArrowLeft } from 'lucide-react';
+import LessonContentUploader from '@/components/LessonContentUploader';
+import { Sparkles, ChevronRight, ChevronLeft, Bot, Loader2, CheckCircle2, FileText, MonitorSmartphone, Cpu, Presentation, ArrowLeft, BookOpen } from 'lucide-react';
 
 
 export default function LessonWizard({ aiConfig, setAiConfig, sessionData, courseData, onComplete, onCancel }) {
@@ -51,6 +52,8 @@ export default function LessonWizard({ aiConfig, setAiConfig, sessionData, cours
   const [generatedLesson, setGeneratedLesson] = useState(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [toast, setToast] = useState(null);
+  // Nội dung bài học được upload để AI dùng làm grounding context
+  const [lessonContent, setLessonContent] = useState(null); // { rawText, index }
 
   // Load local state if we were working on this session before
   useEffect(() => {
@@ -100,44 +103,78 @@ export default function LessonWizard({ aiConfig, setAiConfig, sessionData, cours
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           apiKey: aiConfig.apiKey,
-          modelType: aiConfig.modelType || 'gemini-1.5-flash',
-          mode: 'generate',
-          formData: lessonData,
-          wizardData,
-          chatHistory
+          modelType: aiConfig.modelType || 'gemini-2.5-flash',
+          // Fix lỗi 5: Mode 'generate' không tồn tại trong backend — dùng 'lesson_json' để kích hoạt đúng schema Zod + streaming
+          mode: 'lesson_json',
+          formData: {
+            ...lessonData,
+            competencies: wizardData.competencySettings?.competencies,
+            tools: wizardData.tech?.tools,
+            chatHistory,
+            // Grounding context từ tài liệu upload
+            lessonIndex: lessonContent?.index || null,
+            lessonRawText: lessonContent?.rawText
+              ? lessonContent.rawText.substring(0, 15000)   // giới hạn để tránh vượt token
+              : null,
+          },
         }),
       });
 
+      // Fix lỗi 5: Backend trả về stream (text stream), cần đọc toàn bộ rồi parse JSON object cuối
+      let rawOutput = '';
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          rawOutput += decoder.decode(value, { stream: true });
+        }
+      }
+
+      // Tìm phần JSON hợp lệ cuối cùng trong stream
+      const jsonStart = rawOutput.lastIndexOf('{');
+      const jsonEnd = rawOutput.lastIndexOf('}');
+      if (jsonStart === -1 || jsonEnd === -1) throw new Error('AI không trả về dữ liệu hợp lệ.');
+      const cleanJson = rawOutput.substring(jsonStart, jsonEnd + 1);
+
       let data = {};
       try {
-        data = await response.json();
+        data = JSON.parse(cleanJson);
       } catch (e) {
-        console.error("[LessonWizard] Lỗi parse JSON:", e);
+        console.error('[LessonWizard] Lỗi parse JSON:', e);
       }
 
-      if (!response.ok) throw new Error(data.details || data.error || `Lỗi hệ thống (HTTP ${response.status})`);
+      if (!response.ok) throw new Error(data.error || `Lỗi hệ thống (HTTP ${response.status})`);
       
-      let rawOutput = data.text;
-      if (!rawOutput) throw new Error('AI không trả về dữ liệu hợp lệ. Vui lòng thử lại.');
-
-      let cleanJson = "";
+      // Fix lỗi 5+6: Backend lesson_json trả về { muc_tieu, lessonRows[] } với field `phut`
+      // Cần map lessonRows sang activities với field `time` để tương thích UI
+      let parsedLesson;
       try {
-        cleanJson = rawOutput.replace(/```json\n?|```/g, '').trim();
-        const startObject = cleanJson.indexOf('{');
-        const endObject = cleanJson.lastIndexOf('}');
-        if (startObject !== -1 && endObject !== -1) {
-          cleanJson = cleanJson.substring(startObject, endObject + 1);
+        // Backend trả về LessonSchema: { muc_tieu, lessonRows }
+        if (data.lessonRows && Array.isArray(data.lessonRows)) {
+          // Fix lỗi 6: Chuẩn hóa field `phut` (Zod schema) → `time` (UI)
+          const mappedRows = data.lessonRows.map(row => ({
+            ...row,
+            segmentTitle: row.segmentTitle || '',
+            time: row.phut ? `${row.phut} phút` : (row.time || '5 phút'),
+            detailedContent: row.noiDungChinh || '',
+            teacherActions: row.teacherAct || '',
+            studentActions: row.studentAct || '',
+          }));
+          parsedLesson = { muc_tieu: data.muc_tieu, activities: mappedRows };
+        } else if (data.activities && Array.isArray(data.activities)) {
+          // Fallback: format cũ
+          parsedLesson = data;
+        } else {
+          throw new Error("Dữ liệu trả về không chứa mảng hoạt động giáo án.");
         }
-      } catch (filterError) {
-        console.error("Lỗi khi lọc chuỗi:", filterError);
+      } catch (parseError) {
+        console.error("Lỗi parse dữ liệu giáo án:", data);
+        showToast(`AI trả về dữ liệu lỗi định dạng. Bạn hãy ấn "Tạo lại" nhé!`, 'error');
+        return;
       }
 
-      try {
-        const parsedLesson = JSON.parse(cleanJson);
-        if (!parsedLesson.activities || !Array.isArray(parsedLesson.activities)) {
-          throw new Error("Dữ liệu trả về không chứa mảng các hoạt động giáo án.");
-        }
-        
         if (wizardData.simulation.teacherContent) {
           const simTime = "5 phút";
           parsedLesson.activities.push({
@@ -158,10 +195,6 @@ export default function LessonWizard({ aiConfig, setAiConfig, sessionData, cours
         setTimeout(() => resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
         showToast(`✅ Đã đúc thành công giáo án chuẩn Phụ lục 10!`, 'success');
 
-      } catch (parseError) {
-        console.error("Lỗi Parse JSON:", cleanJson);
-        showToast(`AI trả về dữ liệu lỗi định dạng. Bạn hãy ấn "Tạo lại" nhé!`, 'error'); 
-      }
     } catch (err) {
       console.error('Generate error:', err);
       showToast(`❌ ${err.message}`, 'error');
@@ -285,14 +318,24 @@ export default function LessonWizard({ aiConfig, setAiConfig, sessionData, cours
         
         <div className="xl:col-span-7 space-y-6">
           {currentStep === 2 && (
-            <div className="animate-fade-in">
-              <div className="bg-sky-50 border border-sky-100 rounded-2xl p-4 mb-4 flex items-start gap-3">
+            <div className="animate-fade-in space-y-4">
+              <div className="bg-sky-50 border border-sky-100 rounded-2xl p-4 flex items-start gap-3">
                 <Sparkles className="w-5 h-5 text-sky-500 flex-shrink-0 mt-0.5" />
                 <p className="text-sm text-sky-800 font-medium">
                   Hệ thống đã tự động điền Tên bài học và Số tiết từ Lịch giảng dạy. Bạn có thể bổ sung thêm Ghi chú nếu cần.
                 </p>
               </div>
               <LessonForm data={lessonData} onDataChange={setLessonData} isLocked={true} />
+
+              {/* === Upload Tài liệu Bài học === */}
+              <LessonContentUploader
+                apiKey={aiConfig?.apiKey}
+                lessonName={lessonData.lessonName}
+                onIndexReady={(content) => {
+                  setLessonContent(content);
+                  if (content) showToast('📚 Tài liệu đã được lập chỉ mục! AI sẽ soạn dựa trên nội dung thực.', 'success');
+                }}
+              />
             </div>
           )}
 

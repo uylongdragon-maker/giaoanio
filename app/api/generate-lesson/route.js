@@ -5,19 +5,14 @@ import { NextResponse } from 'next/server';
 
 export const maxDuration = 300;
 
-// Schema cho từng hàng hoạt động giáo án
+// Schema tối giản: AI chỉ điền hoatDongGV và hoatDongHS cho từng hàng
 const LessonRowSchema = z.object({
-  segmentTitle: z.string().describe('Tiêu đề hoạt động (VD: "Ổn định lớp", "1. Giảng bài mới")'),
-  phut: z.number().describe('Thời lượng (Số nguyên phút, tối đa 15)'),
-  noiDungChinh: z.string().describe('Tiêu đề lớn của nội dung, VD: "1. Tổng quan về máy ảnh"'),
-  tieuMucCon: z.array(z.string()).describe('Mảng các tiểu mục nhỏ bên trong, VD: ["1.1 Lịch sử phát triển", "1.2 Phân loại máy ảnh"]'),
-  teacherAct: z.string().describe('Hoạt động CHI TIẾT của Giáo viên, dùng đánh số: "1. Bước một\n2. Bước hai"'),
-  studentAct: z.string().describe('Hoạt động CHI TIẾT của Học sinh, dùng đánh số: "1. Bước một\n2. Bước hai"'),
-  ghi_chu: z.string().describe('Ghi chú').optional(),
+  hoatDongGV: z.string().describe("Hoat dong cua giao vien cho de muc nay (van tat 2-4 cau)"),
+  hoatDongHS: z.string().describe("Hoat dong cua hoc sinh cho de muc nay (van tat 2-4 cau)"),
 });
 
 const LessonSchema = z.object({
-  muc_tieu: z.string().describe('Mục tiêu bài học tổng quát theo Phụ lục 10'),
+  muc_tieu: z.string().describe("Muc tieu bai hoc (Kien thuc, ky nang, thai do)"),
   lessonRows: z.array(LessonRowSchema),
 });
 
@@ -57,27 +52,46 @@ export async function POST(req) {
       const minActivities = Math.max(12, Math.ceil(totalMinutes / 15));
 
       const FORMAT_RULES = `
-QUY TẮC ĐỊNH DẠNG NỘI DUNG (BẮT BUỘC áp dụng cho mọi trường noi_dung, teacherAct, studentAct):
-F1. PHÂN CẤP SỐ: Dùng cấu trúc "1.\n1.1. ...\n1.2. ..." để thể hiện tiểu mục bên trong một hoạt động lớn.
-F2. XUỐNG DÒNG: Mỗi tiểu mục PHẢI nằm trên một dòng riêng, ngăn cách bằng ký tự \n thực sự trong chuỗi JSON.
-F3. CẤU TRÚC MẪU cho trường noi_dung:\n  "1. Tiêu đề lớn\n1.1. Nội dung nhỏ thứ nhất\n1.2. Nội dung nhỏ thứ hai"
-F4. KHÔNG DÙNG markdown phức tạp (không dùng **, ##, bảng, HTML). Chỉ dùng số thứ tự và ký tự \n.
-F5. teacherAct và studentAct cũng dùng danh sách đánh số: "1. Bước một\n2. Bước hai\n3. Bước ba"`;
+QUY TẮC ĐỊNH DẠNG:
+F1. teacherAct và studentAct nên dùng danh sách đánh số hoặc gạch đầu dòng nếu có nhiều bước.
+F2. KHÔNG DÙNG markdown phức tạp (không dùng **, ##, bảng, HTML).`;
 
       const steelSystemPrompt = mode === 'lesson_json'
-        ? `Bạn là Hệ thống Soạn Giáo án Tự động tuân thủ TUYỆT ĐỐI các quy tắc toán học và cấu trúc sau:
-1. TỔNG THỜI GIAN: Bắt buộc phải khớp chính xác 100% với yêu cầu (đúng ${totalMinutes} phút). Tổng các cột phut PHẢI bằng ${totalMinutes}.
-2. GIỚI HẠN THỜI GIAN: KHÔNG CÓ BẤT KỲ HOẠT ĐỘNG NÀO ĐƯỢC VƯỢT QUÁ 15 PHÚT. Để đạt đủ ${totalMinutes} phút, bạn PHẢI phân rã thành ÍT NHẤT ${minActivities} hoạt động liên tục.
-3. CẤU TRÚC ĐỀ MỤC: Ở mỗi hoạt động, các đề mục nhỏ PHẢI ĐƯỢC GỘP CHUNG vào cùng một ô nội dung. KHÔNG được chẻ mỗi đề mục nhỏ thành một hàng (row) riêng biệt trên bảng.
-4. LOGIC SƯ PHẠM: Xây dựng chuỗi hoạt động hợp lý: Ổn định lớp (3–5p) → Kiểm tra bài cũ (5–10p) → Giảng lý thuyết (nhiều bước nhỏ ≤15p mỗi bước) → Đưa ví dụ → Học sinh làm nháp → Chữa bài → Thực hành → Củng cố → Dặn dò.
-5. OUTPUT: Chỉ trả về JSON hợp lệ theo schema được cung cấp. KHÔNG giải thích thêm.
+        ? `Ban la TRO LY SOAN GIAO AN. Nhiem vu: Viet HOAT DONG cua GV va HS cho tung hang trong khung xuong giao an.
+
+QUY TAC BAT BUOC:
+1. TRA VE DUNG SO HANG: Khung xuong co bao nhieu hang, tra ve day du bay nhieu doi tuong trong lessonRows.
+2. TUONG UNG TUNG HANG: hoatDongGV va hoatDongHS phai duoc viet dua tren noi dung "noiDungChinh" va "segmentTitle" cua dung hang do.
+3. VAN TAT - SUC TICH: Moi truong viet 2-4 cau. Ghi hoat dong cu the, theo thu tu thuc hien.
+4. LIEN QUAN NOI DUNG: Hoat dong phai gan voi noi dung de muc cu the, khong chung chung mo ho.
+5. NGON NGU: Tieng Viet ro rang, hanh dong bat dau bang dong tu (Giai thich, Huong dan, Lang nghe, Ghi chep, Thuc hanh...).
 ${FORMAT_RULES}`
         : `${systemPrompt || ''}\n${FORMAT_RULES}`;
 
+      // Grounding context tu tai lieu bai hoc hoac Tu dien do giao vien upload
+      const hasGrounding = !!(formData?.lessonIndex || formData?.lessonRawText || formData?.knowledgeBase);
+      const groundingBlock = hasGrounding ? `
+===== TAI LIEU NGUON (Tra cuu de viet hoat dong chinh xac voi noi dung mon hoc) =====
+${formData?.knowledgeBase ? `[DE CUONG MON HOC]:\n${formData.knowledgeBase.substring(0, 6000)}\n` : ''}${formData?.lessonIndex?.sections
+  ? formData.lessonIndex.sections.map((s, i) =>
+      `${i + 1}. ${s.heading}\n   Y chinh: ${(s.keyPoints || []).join(' | ')}`
+    ).join('\n')
+  : ''}${formData?.lessonRawText ? `\nTrich dan bo sung:\n${formData.lessonRawText.substring(0, 2000)}` : ''}
+===== HET TAI LIEU NGUON =====` : '';
+
+      const skeletonRows = (formData?.skeleton || []);
       const steelPrompt = mode === 'lesson_json'
-        ? `Dữ liệu đầu vào: Lịch trình buổi học gồm ${totalMinutes} phút (tổng bắt buộc = ${totalMinutes} phút).
-Nội dung cần dạy: ${JSON.stringify(formData?.topics || formData?.contents || formData || {})}.
-Hãy phân bổ thời gian (max 15p/hoạt động, ít nhất ${minActivities} hoạt động), gom các ý nhỏ vào chung một mục và trình bày nội dung theo phân cấp số (1. / 1.1. / 1.2.) với ký tự xuống dòng \n giữa các mục.`
+        ? `[KHUNG XUONG GIAO AN] - Cac hang can dien hoat dong GV/HS:
+${skeletonRows.map((row, i) => `Hang ${i + 1}: [${row.segmentTitle}] - Noi dung: ${row.noiDungChinh || ''} ${(row.tieuMucCon || []).join(', ')}`).join('\n')}
+
+Ten buoi hoc: ${formData?.lessonName || 'Bai hoc'}
+Tong thoi gian: ${formData?.totalMinutes || 180} phut
+
+${groundingBlock}
+
+NHIEM VU: Viet hoatDongGV va hoatDongHS cho TUNG HANG theo dung thu tu tren. Moi hang 2-4 cau ngan.
+Tong so hang tra ve phai la dung ${skeletonRows.length} hang.
+Cung dat muc_tieu chuan su pham cho toan buoi.`
         : fullPrompt;
 
       const result = await streamObject({
@@ -85,7 +99,7 @@ Hãy phân bổ thời gian (max 15p/hoạt động, ít nhất ${minActivities}
         schema: mode === 'lesson_row' ? LessonRowSchema : LessonSchema,
         system: steelSystemPrompt,
         prompt: steelPrompt,
-        temperature: 0.7,
+        temperature: 0.6,
       });
 
       return result.toTextStreamResponse();

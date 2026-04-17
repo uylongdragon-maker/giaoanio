@@ -1,6 +1,6 @@
 /**
  * ============================================================
- * MODULE: THUẬT TOÁN PHÂN BỔ THỜI GIAN THEO TỶ LỆ 45/60
+ * MODULE: THUẬT TOÁN PHÂN BỔ THỜI GIAN THEO TỶ LỆ CẮT LÁT (WATERFALL)
  * ============================================================
  * Quy tắc quy đổi:
  *   1 Giờ LT (Lý thuyết)  = 45 phút
@@ -8,31 +8,13 @@
  *   1 Giờ KLT/KTH (KT)    = 60 phút
  *   1 Giờ TLT/TTH (Thi)   = 60 phút
  *
- * Sức chứa 1 buổi (4 tiết)  = 4 × 45 = 180 phút
- *
- * Thuật toán: First-Fit Bin Packing theo đơn vị phút.
+ * Thuật toán: Dàn phẳng toàn bộ thời lượng bài học xuống và cắt chính xác
+ * bằng capacity của buổi (VD: 4 tiết = 180 phút). Chữ "đề mục" sẽ được gói vào.
+ * Không xáo trộn thứ tự, không ưu tiên loại bài.
  * ============================================================
  */
 
 const MINUTES_PER_PERIOD = 45; // 1 tiết = 45 phút
-
-/**
- * Quy đổi giờ LT → phút.
- * @param {number} hours
- * @returns {number} minutes
- */
-function ltToMinutes(hours) {
-  return Math.round((parseFloat(hours) || 0) * MINUTES_PER_PERIOD);
-}
-
-/**
- * Quy đổi giờ TH/KT/Thi → phút.
- * @param {number} hours
- * @returns {number} minutes
- */
-function thToMinutes(hours) {
-  return Math.round((parseFloat(hours) || 0) * 60);
-}
 
 /**
  * Lấy ngày dạy tiếp theo (bỏ qua nghỉ lễ, ngày không có tiết).
@@ -54,40 +36,7 @@ function getNextTeachingDay(date, dayConfigs, holidaySet) {
 }
 
 /**
- * Tự động nhận diện loại buổi học từ contents.
- * @param {Array} contents
- * @returns {'LÝ THUYẾT'|'THỰC HÀNH'|'TÍCH HỢP'|'KIỂM TRA'|'THI'}
- */
-function autoTagSession(contents) {
-  let totalLT = 0, totalTH = 0, totalKT = 0, totalThi = 0;
-  contents.forEach(c => {
-    totalLT  += c.gioLT_used  || 0;
-    totalTH  += c.gioTH_used  || 0;
-    totalKT  += (c.gioKLT_used || 0) + (c.gioKTH_used || 0);
-    totalThi += (c.gioTLT_used || 0) + (c.gioTTH_used || 0);
-  });
-  if (totalThi > 0) return 'THI';
-  if (totalKT  > 0) return 'KIỂM TRA';
-  if (totalLT > 0 && totalTH > 0) return 'TÍCH HỢP';
-  if (totalTH > 0) return 'THỰC HÀNH';
-  return 'LÝ THUYẾT';
-}
-
-/**
- * Tạo sessionTitle từ danh sách tên bài (lấy duy nhất, ngắn gọn).
- */
-function buildSessionTitle(contents) {
-  const names = [...new Set(contents.map(c => c.lessonName).filter(Boolean))];
-  if (names.length === 0) return 'Buổi học';
-  if (names.length === 1) return names[0];
-  // Nếu có nhiều bài, lấy tên đầu + rút gọn
-  return names[0] + (names.length > 1 ? ` & ${names.length - 1} bài khác` : '');
-}
-
-/**
- * ============================================================
  * HÀM CHÍNH: generateScheduleAlgorithm
- * ============================================================
  * @param {Array}  syllabus    - Đề cương (array bài học từ Step3)
  * @param {string} startDate   - 'YYYY-MM-DD'
  * @param {Object} dayConfigs  - { 0: 0, 1: 4, 2: 0, ... } (0=CN, 1-6=T2-T7)
@@ -100,230 +49,117 @@ export function generateScheduleAlgorithm(
   startDate,
   dayConfigs,
   holidayList = [],
-  periodsPerSession = 4
+  periodsPerSession = 4 // Không thực sự dùng, sẽ lấy số tiết từng ngày
 ) {
   if (!syllabus || syllabus.length === 0 || !startDate) return [];
 
-  const SESSION_CAPACITY = periodsPerSession * MINUTES_PER_PERIOD; // phút/buổi
   const holidaySet = new Set(holidayList);
-
+  
   // ─────────────────────────────────────────────
-  // BƯỚC 1: Phân rã đề cương thành các "CHUNK" phút
-  // Mỗi chunk = { lessonName, subItem, type, ltMin, thMin, ktMin, thiMin, isIndependent }
+  // BƯỚC 1: Dàn phẳng đề cương thành các tiểu mục (Sub-items)
   // ─────────────────────────────────────────────
-  const chunks = []; // { lessonRef, subItem, type, remainLT, remainTH, remainKT, remainThi, isIndependent }
-
+  const queue = [];
   syllabus.forEach((item, idx) => {
-    const name = (item.tenBai || '').toLowerCase();
-    const isFinalExam  = name.includes('thi kết thúc') || name.includes('thi tốt nghiệp')
-                      || (parseFloat(item.gioTLT) > 0) || (parseFloat(item.gioTTH) > 0);
-    const isKiemTra    = name.includes('kiểm tra')
-                      || (parseFloat(item.gioKLT) > 0) || (parseFloat(item.gioKTH) > 0);
+    // Tính tổng phút của toàn bộ bài này dựa trên số TIẾT và Loại tiết
+    const ltMinutes = Math.round((parseFloat(item.gioLT) || 0) * 45);
+    const thMinutes = Math.round((parseFloat(item.gioTH) || 0) * 60);
+    const ktMinutes = Math.round((parseFloat(item.gioKLT || 0) + parseFloat(item.gioKTH || 0)) * 60);
+    const thiMinutes = Math.round((parseFloat(item.gioTLT || 0) + parseFloat(item.gioTTH || 0)) * 60);
+    
+    let totalMinutes = ltMinutes + thMinutes + ktMinutes + thiMinutes;
+    if (totalMinutes <= 0) return; // Bỏ qua nếu thời gian bằng 0
 
-    const ltMin  = isFinalExam ? 0 : ltToMinutes(item.gioLT);
-    const thMin  = isFinalExam ? 0 : thToMinutes(item.gioTH);
-    const ktMin  = isFinalExam ? 0 : thToMinutes((parseFloat(item.gioKLT)||0) + (parseFloat(item.gioKTH)||0));
-    const thiMin = isFinalExam ? SESSION_CAPACITY : thToMinutes((parseFloat(item.gioTLT)||0) + (parseFloat(item.gioTTH)||0));
+    // Bóc tách mảng tieuMuc từ Dữ liệu cứng
+    const rawLines = Array.isArray(item.tieuMuc) ? item.tieuMuc : [];
+    const subItems = rawLines.length > 0 ? rawLines : [item.tenBai || `Bài ${idx + 1}`];
 
-    const subItemText = (item.deMuc || '')
-      .split('\n').map(s => s.trim()).filter(Boolean).join('; ')
-      || item.tenBai || `Bài ${idx + 1}`;
+    // Chia đều thời gian tổng vào từng tiểu mục con
+    const baseMins = Math.floor(totalMinutes / subItems.length);
+    const extraMins = totalMinutes % subItems.length;
 
-    chunks.push({
-      lessonName: item.tenBai || `Bài ${idx + 1}`,
-      subItem: subItemText,
-      isIndependent: isFinalExam, // Buổi thi phải chiếm trọn 1 buổi
-      isKiemTra,
-      remainLT:  ltMin,
-      remainTH:  thMin,
-      remainKT:  ktMin,
-      remainThi: thiMin,
+    subItems.forEach((line, lineIdx) => {
+      const allocatedMins = baseMins + (lineIdx === 0 ? extraMins : 0); // đập phần dư vào dòng đầu
+      if (allocatedMins > 0) {
+        // Tự động chuyển đổi "1." -> "1.1", "2." -> "1.2" để chuyên nghiệp hơn
+        let displayLabel = line;
+        const lessonNumber = idx + 1;
+        
+        if (line.match(/^[0-9]+[\.\)]/)) {
+          const subNumMatch = line.match(/^([0-9]+)[\.\)]/);
+          const contentText = line.replace(/^[0-9]+[\.\)]/, "").trim();
+          displayLabel = `${lessonNumber}.${subNumMatch[1]} ${contentText}`;
+        }
+
+        queue.push({
+          lessonName: item.tenBai || `Bài ${lessonNumber}`,
+          subItem: displayLabel,
+          remainTotal: allocatedMins,
+        });
+      }
     });
   });
 
   // ─────────────────────────────────────────────
-  // BƯỚC 2: BIN PACKING — nhét từng chunk vào các buổi
-  // Ưu tiên: LT trước → TH → KT → Thi
-  // Buổi thi (isIndependent) phải chiếm buổi riêng
+  // BƯỚC 2: Cắt lát Tuần tự (Waterfall Slicing)
   // ─────────────────────────────────────────────
   const sessions = [];
   let currentDate = new Date(startDate + 'T00:00:00');
   let sessionCounter = 1;
-  let chunkIdx = 0;
+  let qIdx = 0;
 
-  // Trạng thái nhét trong từng chunk: đang nhét loại nào
-  // (LT → TH → KT → Thi)
-
-  while (chunkIdx < chunks.length && sessions.length < 500) {
-    // Tìm ngày dạy tiếp theo
+  while (qIdx < queue.length && sessions.length < 500) {
     const dayInfo = getNextTeachingDay(currentDate, dayConfigs, holidaySet);
     if (!dayInfo) break; // Hết lịch
 
-    const capacity = dayInfo.periods * MINUTES_PER_PERIOD;
-    let remaining = capacity; // phút còn trống trong buổi này
-
+    const sessionCapacityMinutes = dayInfo.periods * MINUTES_PER_PERIOD;
+    let remainingCapacity = sessionCapacityMinutes;
     const sessionContents = [];
 
-    // Kiểm tra: chunk đầu tiên cần nhét có phải thi độc lập không?
-    const nextChunk = chunks[chunkIdx];
-    if (nextChunk.isIndependent && sessionContents.length === 0) {
-      // Buổi thi: chiếm toàn bộ capacity
+    // Nhồi liên tục queue vào session cho đến khi hết dung lượng buổi
+    while (remainingCapacity > 0.5 && qIdx < queue.length) {
+      const currentChunk = queue[qIdx];
+      const takeMinutes = Math.min(currentChunk.remainTotal, remainingCapacity);
+      
       sessionContents.push({
-        lessonName:  nextChunk.lessonName,
-        subItem:     nextChunk.subItem,
-        gioLT_used:  0,
-        gioTH_used:  0,
-        gioKLT_used: 0,
-        gioKTH_used: 0,
-        gioTLT_used: 0,
-        gioTTH_used: +(capacity / 60).toFixed(2),
-        type:        'Thi',
+        lessonName: currentChunk.lessonName,
+        subItem: currentChunk.subItem,
+        allocatedMinutes: takeMinutes
       });
-      nextChunk.remainThi = 0;
-      chunkIdx++;
-      remaining = 0;
-    } else {
-      // Vòng lặp nhét từng chunk vào buổi hiện tại
-      while (remaining > 0.5 && chunkIdx < chunks.length) {
-        const chunk = chunks[chunkIdx];
 
-        // Nếu gặp buổi thi độc lập và buổi này đã có nội dung → kết thúc buổi
-        if (chunk.isIndependent && sessionContents.length > 0) break;
+      currentChunk.remainTotal -= takeMinutes;
+      remainingCapacity -= takeMinutes;
 
-        let tookAny = false;
-
-        // --- Nhét LT ---
-        if (chunk.remainLT > 0.5) {
-          const take = Math.min(chunk.remainLT, remaining);
-          const takeHours = +(take / MINUTES_PER_PERIOD).toFixed(4);
-          // Tìm hoặc tạo content entry cho bài này
-          let entry = sessionContents.find(c => c.lessonName === chunk.lessonName && c.type !== 'Thi' && c.type !== 'Kiểm tra');
-          if (!entry) {
-            entry = {
-              lessonName:  chunk.lessonName,
-              subItem:     chunk.subItem,
-              gioLT_used:  0,
-              gioTH_used:  0,
-              gioKLT_used: 0,
-              gioKTH_used: 0,
-              gioTLT_used: 0,
-              gioTTH_used: 0,
-              type:        'Lý thuyết',
-            };
-            sessionContents.push(entry);
-          }
-          entry.gioLT_used = +((entry.gioLT_used || 0) + takeHours).toFixed(4);
-          chunk.remainLT -= take;
-          remaining     -= take;
-          tookAny = true;
-        }
-
-        // --- Nhét TH ---
-        if (chunk.remainTH > 0.5 && remaining > 0.5) {
-          const take = Math.min(chunk.remainTH, remaining);
-          const takeHours = +(take / 60).toFixed(4);
-          let entry = sessionContents.find(c => c.lessonName === chunk.lessonName);
-          if (!entry) {
-            entry = {
-              lessonName:  chunk.lessonName,
-              subItem:     chunk.subItem,
-              gioLT_used:  0,
-              gioTH_used:  0,
-              gioKLT_used: 0,
-              gioKTH_used: 0,
-              gioTLT_used: 0,
-              gioTTH_used: 0,
-              type:        'Thực hành',
-            };
-            sessionContents.push(entry);
-          }
-          entry.gioTH_used = +((entry.gioTH_used || 0) + takeHours).toFixed(4);
-          if (entry.gioLT_used > 0) entry.type = 'Tích hợp';
-          else entry.type = 'Thực hành';
-          chunk.remainTH -= take;
-          remaining      -= take;
-          tookAny = true;
-        }
-
-        // --- Nhét KT ---
-        if (chunk.remainKT > 0.5 && remaining > 0.5) {
-          const take = Math.min(chunk.remainKT, remaining);
-          const takeHours = +(take / 60).toFixed(4);
-          const entry = {
-            lessonName:  chunk.lessonName,
-            subItem:     'Kiểm tra',
-            gioLT_used:  0,
-            gioTH_used:  0,
-            gioKLT_used: takeHours,
-            gioKTH_used: 0,
-            gioTLT_used: 0,
-            gioTTH_used: 0,
-            type:        'Kiểm tra',
-          };
-          sessionContents.push(entry);
-          chunk.remainKT -= take;
-          remaining      -= take;
-          tookAny = true;
-        }
-
-        // --- Nhét Thi ---
-        if (chunk.remainThi > 0.5 && remaining > 0.5) {
-          const take = Math.min(chunk.remainThi, remaining);
-          const takeHours = +(take / 60).toFixed(4);
-          const entry = {
-            lessonName:  chunk.lessonName,
-            subItem:     'Thi kết thúc',
-            gioLT_used:  0,
-            gioTH_used:  0,
-            gioKLT_used: 0,
-            gioKTH_used: 0,
-            gioTLT_used: 0,
-            gioTTH_used: takeHours,
-            type:        'Thi',
-          };
-          sessionContents.push(entry);
-          chunk.remainThi -= take;
-          remaining       -= take;
-          tookAny = true;
-        }
-
-        // Nếu chunk đã được nhét hết → sang chunk tiếp
-        const chunkDone = chunk.remainLT  <= 0.5
-                       && chunk.remainTH  <= 0.5
-                       && chunk.remainKT  <= 0.5
-                       && chunk.remainThi <= 0.5;
-        if (chunkDone) {
-          chunkIdx++;
-        } else {
-          // Chunk chưa xong nhưng buổi đã đầy → sang buổi mới
-          break;
-        }
-
-        if (!tookAny) {
-          chunkIdx++; // Tránh vòng lặp vô tận
-        }
+      // Nếu chunk này cạn thời gian, tiến tới bài tiếp theo trong đề cương
+      if (currentChunk.remainTotal <= 0.5) {
+        qIdx++;
       }
     }
 
     if (sessionContents.length > 0) {
-      const sessionTag  = autoTagSession(sessionContents);
-      const totalMinutes = dayInfo.periods * MINUTES_PER_PERIOD;
+      // Build tiêu đề buổi: Liệt kê các bài độc nhất có trong buổi này
+      const names = [...new Set(sessionContents.map(c => c.lessonName).filter(Boolean))];
+      const sessionTitle = names.length <= 2 
+        ? names.join(' & ') 
+        : names[0] + ` & ${names.length - 1} bài khác`;
+
+      // Thu thập mảng các tiểu mục đã được cắt (Flat array)
+      const slicedSubItems = [...new Set(sessionContents.map(c => c.subItem).filter(Boolean))];
 
       sessions.push({
-        id:           `session-${sessionCounter}`,
+        id: `session-${sessionCounter}`,
         sessionNumber: sessionCounter,
-        date:          dayInfo.iso,
-        sessionTitle:  buildSessionTitle(sessionContents),
-        lessonType:    sessionTag,
-        totalPeriods:  dayInfo.periods,
-        totalMinutes,
-        contents:      sessionContents,
-        status:        'pending',
+        date: dayInfo.iso,
+        sessionTitle: sessionTitle,
+        totalPeriods: dayInfo.periods,
+        totalMinutes: sessionCapacityMinutes,
+        contents: sessionContents,
+        slicedSubItems: slicedSubItems,
+        status: 'pending',
       });
       sessionCounter++;
     }
 
-    // Chuyển sang ngày hôm sau để tìm ngày dạy tiếp
+    // Sang ngày tiếp theo
     currentDate = new Date(dayInfo.date);
     currentDate.setDate(currentDate.getDate() + 1);
   }

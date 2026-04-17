@@ -10,32 +10,28 @@ import { auth, db } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { generateScheduleAlgorithm } from '@/app/utils/scheduleAlgorithm';
 
-const LessonRowSchema = z.object({
-  segmentTitle: z.string(),
-  phut: z.number(),
-  noiDungChinh: z.string(),
-  tieuMucCon: z.array(z.string()),
-  teacherAct: z.string(),
-  studentAct: z.string(),
-  ghi_chu: z.string().optional(),
+// Schema dong bo voi backend: AI chi tra ve hoatDongGV va hoatDongHS
+const AILessonRowSchema = z.object({
+  hoatDongGV: z.string(),
+  hoatDongHS: z.string(),
 });
 
-const LessonSchema = z.object({
+const AILessonSchema = z.object({
   muc_tieu: z.string(),
-  lessonRows: z.array(LessonRowSchema),
+  lessonRows: z.array(AILessonRowSchema),
 });
 
 export default function Step5Execution({ aiConfig }) {
   const { activeCourse, updateActiveCourse, resetWorkflow, prevStep } = useStore();
   const [loading, setLoading] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const [activeTab, setActiveTab] = useState('theory'); // 'theory', 'practice', 'integrated'
   const [error, setError] = useState('');
   const [previewSession, setPreviewSession] = useState(null);
-  const templateInputRef = useRef(null);
   const [currentSessionId, setCurrentSessionId] = useState(null);
   const [currentFinalType, setCurrentFinalType] = useState('');
   const [finalData, setFinalData] = useState(null);
+  const [pendingRowIndex, setPendingRowIndex] = useState(null);
+  // Giữ skeleton gốc để merge với kết quả AI (tránh AI ghi đè thời gian)
+  const [skeletonRef, setSkeletonRef] = useState([]);
 
   // Hàm lưu trữ giáo án vào Firebase (UID-based partitioning)
   const saveLessonToFirebase = async (lessonData) => {
@@ -59,17 +55,20 @@ export default function Step5Execution({ aiConfig }) {
     }
   };
 
-  const [pendingRowIndex, setPendingRowIndex] = useState(null);
-
   const { object: rowObject, submit: submitRow, isLoading: isRowStreaming } = useObject({
     api: '/api/generate-lesson',
-    schema: LessonRowSchema,
+    schema: AILessonRowSchema,
     onFinish: ({ object: finalRow }) => {
       if (currentSessionId && pendingRowIndex !== null && finalRow) {
         const updatedSchedule = activeCourse.schedule.map(s => {
           if (s.id === currentSessionId) {
             const newRows = [...(s.generatedLesson?.activities || s.generatedLesson?.lessonRows || [])];
-            newRows[pendingRowIndex] = { ...newRows[pendingRowIndex], ...finalRow };
+            newRows[pendingRowIndex] = { 
+               ...newRows[pendingRowIndex], 
+               teacherAct: finalRow.hoatDongGV || newRows[pendingRowIndex]?.teacherAct,
+               studentAct: finalRow.hoatDongHS || newRows[pendingRowIndex]?.studentAct,
+               phut: finalRow.tgian || newRows[pendingRowIndex]?.phut
+            };
             return { ...s, generatedLesson: { ...s.generatedLesson, activities: newRows, lessonRows: newRows } };
           }
           return s;
@@ -90,54 +89,45 @@ export default function Step5Execution({ aiConfig }) {
 
   const { object, submit, isLoading: isStreaming, error: streamingError } = useObject({
     api: '/api/generate-lesson',
-    schema: LessonSchema,
-    onFinish: ({ object: finalObject }) => {
-      if (currentSessionId && finalObject?.lessonRows) {
-        // TỰ ĐỘNG CHUẨN HÓA THỜI GIAN (180 PHÚT/BUỔI) - THUẬT TOÁN SUPREME NORMALIZATION
-        const targetTotal = (Number(activeCourse.schedule.find(s => s.id === currentSessionId)?.totalPeriods) || 4) * 45;
-        const aiTotal = finalObject.lessonRows.reduce((sum, row) => sum + (Number(row.phut) || 0), 0);
+    schema: AILessonSchema,
+    onFinish: ({ object: resultObj }) => {
+      if (resultObj && resultObj.lessonRows) {
+        // MERGE: Chi cap nhat hoatDongGV va hoatDongHS tu AI
+        // Giu nguyen tat ca cac truong khac tu skeleton goc
+        const baseSkeleton = skeletonRef.length > 0 ? skeletonRef : (previewSession?.generatedLesson?.lessonRows || []);
         
-        let normalizedRows = [...finalObject.lessonRows];
-        if (aiTotal > 0 && aiTotal !== targetTotal) {
-          console.log(`SUPREME NORMALIZING: AI ${aiTotal}m -> Target ${targetTotal}m`);
-          const ratio = targetTotal / aiTotal;
-          let currentRunningTotal = 0;
-          
-          normalizedRows = normalizedRows.map((row, index) => {
-            if (index === normalizedRows.length - 1) {
-               return { ...row, phut: targetTotal - currentRunningTotal };
-            }
-            const newPhut = Math.round((Number(row.phut) || 0) * ratio);
-            currentRunningTotal += newPhut;
-            return { ...row, phut: newPhut };
-          });
-        }
+        const processedRows = baseSkeleton.map((skelRow, i) => {
+          const aiRow = resultObj.lessonRows[i] || {};
+          return {
+            ...skelRow,                              // Giu nguyen tat ca tu skeleton
+            teacherAct: aiRow.hoatDongGV || skelRow.teacherAct || "",  // Chi update GV
+            studentAct: aiRow.hoatDongHS || skelRow.studentAct || "",  // Chi update HS
+          };
+        });
 
-        const finalData = {
-          muc_tieu: finalObject.muc_tieu,
-          lessonRows: normalizedRows,
+        const lessonData = {
+          muc_tieu: resultObj.muc_tieu || "Muc tieu bai hoc",
+          lessonRows: processedRows,
           lessonType: currentFinalType
         };
 
-        setFinalData(finalData);
+        setFinalData(lessonData);
         
         const updatedSchedule = activeCourse.schedule.map(s => 
-          s.id === currentSessionId ? { ...s, generatedLesson: finalData, status: 'completed', lessonType: currentFinalType } : s
+          s.id === currentSessionId ? { ...s, generatedLesson: lessonData, status: 'completed', lessonType: currentFinalType } : s
         );
         updateActiveCourse({ schedule: updatedSchedule });
         
-        if (previewSession?.id === currentSessionId) {
-          setPreviewSession(prev => ({
-            ...prev,
-            generatedLesson: finalData,
-            status: 'completed',
-            lessonType: currentFinalType
-          }));
-        }
+        setPreviewSession(prev => ({
+          ...prev,
+          generatedLesson: lessonData,
+          status: 'completed',
+          lessonType: currentFinalType
+        }));
       }
     },
     onError: (err) => {
-      // handled in useEffect below
+      console.error("Streaming error:", err);
     }
   });
 
@@ -165,50 +155,9 @@ export default function Step5Execution({ aiConfig }) {
     }
   }, [streamingError]);
 
-  const handleTemplateUpload = async (file) => {
-    if (!file) return;
-    setIsUploading(true);
-    try {
-      let rawText = "";
-      if (file.name.toLowerCase().endsWith('.docx')) {
-        const mammoth = await import('mammoth');
-        const arrayBuffer = await file.arrayBuffer();
-        const result = await mammoth.extractRawText({ arrayBuffer });
-        rawText = result.value;
-      } else {
-        const reader = new FileReader();
-        const base64Promise = new Promise((resolve) => {
-          reader.onload = () => resolve(reader.result.split(',')[1]);
-          reader.readAsDataURL(file);
-        });
-        const base64Data = await base64Promise;
-        // Client-side AbortController removed
+  // Removed – template upload no longer needed after UI cleanup
+  const handleTemplateUpload = () => {};
 
-        const res = await fetch('/api/generate-lesson', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            apiKey: aiConfig?.apiKey,
-            modelType: aiConfig?.modelType || aiConfig?.model,
-            mode: 'analyze_file',
-            fileData: { mimeType: file.type, data: base64Data }
-          })
-        });
-
-        // No timeout clearance needed
-        const data = await res.json();
-        rawText = data.text || data.summary || "";
-      }
-      
-      const newTemplates = { ...(activeCourse.lessonTemplates || {}) };
-      newTemplates[activeTab] = rawText;
-      updateActiveCourse({ lessonTemplates: newTemplates });
-    } catch (err) {
-      setError("Lỗi xử lý file mẫu: " + err.message);
-    } finally {
-      setIsUploading(false);
-    }
-  };
 
   const handleGenerateSchedule = () => {
     setLoading(true);
@@ -325,6 +274,13 @@ export default function Step5Execution({ aiConfig }) {
 
         setFinalData(null); // Reset before new stream
 
+        // Lấy skeleton từ previewSession (state này có dữ liệu do handleSessionClick tạo ra)
+        const currentPreviewSession = previewSession;
+        const skeleton = currentPreviewSession?.generatedLesson?.lessonRows || [];
+        
+        // Lưu skeleton ref để dùng trong onFinish (merge thời gian)
+        setSkeletonRef(skeleton);
+
         // STREAMING VIA SDK
         const uniqueLessonNames = Array.from(new Set(sessionParam.contents.map(c => c.lessonName).filter(Boolean)));
         submit({
@@ -333,14 +289,11 @@ export default function Step5Execution({ aiConfig }) {
           mode: 'lesson_json',
           formData: {
             lessonName: uniqueLessonNames.join(' & '),
-            topics: sessionParam.contents.map(c => c.subItem),
+            skeleton: skeleton,   // Gửi skeleton THỰC SỰ từ previewSession
             totalMinutes: (Number(sessionParam.totalPeriods) || 0) * 45,
-            notes: (activeCourse.courseContext || "") + `\n\n[MẪU GIÁO ÁN ${finalType.toUpperCase()} RIÊNG BIỆT]:\n` + template,
+            knowledgeBase: activeCourse.knowledgeBase || "",
             lessonType: finalType
-          },
-          systemPrompt: `BẠN LÀ CHUYÊN GIA BIÊN SOẠN GIÁO ÁN SƯ PHẠM ĐẲNG CẤP.
-            Nhiệm vụ: Soạn giáo án CHI TIẾT loại ${finalType.toUpperCase()} dựa trên ĐỀ CƯƠNG và [MẪU GIÁO ÁN].
-            CHỈ TRẢ VỀ JSON DUY NHẤT THEO SCHEMA, KHÔNG GIẢI THÍCH.`
+          }
         });
       }
     } catch (err) {
@@ -374,15 +327,57 @@ export default function Step5Execution({ aiConfig }) {
 
   const handleSessionClick = (session) => {
     if (session.status === 'pending') {
+      const targetTotal = session.totalMinutes || 180;
+      const skeleton = [];
+      const subItemsText = (session.slicedSubItems || []).join(', ');
+      
+      const isExam = session.sessionTitle?.toLowerCase().includes("thi");
+
+      if (isExam) {
+        // TRƯỜNG HỢP THI/KIỂM TRA: Giữ nguyên khối 180p
+        skeleton.push({
+          segmentTitle: "1. Tổ chức Thi / Kiểm tra",
+          noiDungChinh: session.sessionTitle,
+          tieuMucCon: session.slicedSubItems || [],
+          phut: targetTotal,
+          teacherAct: "Cấp phát đề, coi thi",
+          studentAct: "Làm bài tập trung"
+        });
+      } else {
+        // TRƯỜNG HỢP HỌC TẬP: Chia theo Tiến trình sư phạm (Pedagogical Flow)
+        // Ratios: Dẫn nhập(5p), Kiến thức mới(25%), Thảo luận(15%), Thực hành(40%), Kết thúc(15%)
+        const introTime = 5;
+        const available = targetTotal - introTime;
+        
+        const steps = [
+          { title: "1. Dẫn nhập / Ổn định", desc: "Tạo tâm thế, kiểm tra kiến thức cũ", ratio: 0, fixed: 5 },
+          { title: "2. Hình thành kiến thức mới", desc: `Giảng giải nội dung chính: ${subItemsText}`, ratio: 0.30 },
+          { title: "3. Thảo luận / Vấn đáp tương tác", desc: "Phân tích sâu, giải đáp thắc mắc về nội dung bài học", ratio: 0.15 },
+          { title: "4. Luyện tập / Thực hành", desc: `Vận dụng kiến thức vào bài tập: ${subItemsText}`, ratio: 0.40 },
+          { title: "5. Tổng kết / Giao nhiệm vụ", desc: "Chốt kiến thức, hướng dẫn tự học", ratio: 0.15 }
+        ];
+
+        steps.forEach(step => {
+          let stepPhut = step.fixed || Math.round(available * step.ratio);
+          skeleton.push({
+            segmentTitle: step.title,
+            noiDungChinh: step.desc,
+            tieuMucCon: (step.title.includes("2.") || step.title.includes("4.")) ? (session.slicedSubItems || []) : [],
+            phut: stepPhut,
+            teacherAct: "", studentAct: ""
+          });
+        });
+
+        // Cân bằng thời gian cuối cùng
+        const currentTotal = skeleton.reduce((sum, s) => sum + s.phut, 0);
+        if (currentTotal !== targetTotal) {
+          skeleton[skeleton.length - 1].phut += (targetTotal - currentTotal);
+        }
+      }
+
       const emptyLesson = {
-        muc_tieu: "",
-        lessonRows: Array(12).fill(null).map((_, i) => ({
-          segmentTitle: i === 0 ? "Ổn định lớp" : i === 1 ? "Kiểm tra bài cũ" : `Nội dung mới (Mục ${i-1})`,
-          phut: i === 0 ? 5 : i === 1 ? 10 : 15,
-          noi_dung: "",
-          teacherAct: "",
-          studentAct: ""
-        }))
+        muc_tieu: "Đang chờ AI soạn mục tiêu tiêu chuẩn sư phạm...",
+        lessonRows: skeleton
       };
       setPreviewSession({ ...session, generatedLesson: emptyLesson });
     } else {
@@ -422,61 +417,15 @@ export default function Step5Execution({ aiConfig }) {
          </div>
       </div>
       
-      <div className="mb-10 bg-white border border-slate-200 rounded-[32px] overflow-hidden shadow-sm">
-        <div className="flex bg-slate-50 border-b border-slate-100 p-2">
-          {[
-            { id: 'theory', label: 'Lý thuyết (PL10)', icon: BookOpen },
-            { id: 'practice', label: 'Thực hành (PL11)', icon: Zap },
-            { id: 'integrated', label: 'Tích hợp (PL12)', icon: Layout }
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${
-                activeTab === tab.id ? 'bg-white text-indigo-600 shadow-sm border border-slate-100' : 'text-slate-400 hover:text-slate-600'
-              }`}
-            >
-              <tab.icon className="w-3 h-3" />
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="p-8">
-          <div className="flex items-center justify-between mb-4">
-            <label className="flex items-center gap-3 text-sm font-black text-slate-800 uppercase tracking-widest">
-               <FileText className="w-5 h-5 text-indigo-500" />
-               GIÁO ÁN MẪU - {activeTab === 'theory' ? 'LÝ THUYẾT' : activeTab === 'practice' ? 'THỰC HÀNH' : 'TÍCH HỢP'}
-            </label>
-            <button 
-              onClick={() => templateInputRef.current?.click()}
-              disabled={isUploading}
-              className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-bold transition-all text-[10px] border border-slate-200"
-            >
-              {isUploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <UploadCloud className="w-3 h-3" />}
-              TẢI FILE MẪU ({activeTab.toUpperCase()})
-            </button>
-            <input 
-              type="file" 
-              ref={templateInputRef} 
-              onChange={(e) => handleTemplateUpload(e.target.files?.[0])}
-              hidden 
-              accept=".docx,.pdf,.txt,image/*"
-            />
+      <div className="mb-12 bg-white rounded-3xl border border-slate-200 p-8 shadow-sm">
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center">
+            <Layout className="w-5 h-5 text-indigo-600" />
           </div>
-          <textarea 
-            placeholder={`Dán mẫu giáo án ${activeTab === 'theory' ? 'Lý thuyết' : activeTab === 'practice' ? 'Thực hành' : 'Tích hợp'} vào đây...`}
-            value={(activeCourse.lessonTemplates || {})[activeTab] || ''}
-            onChange={(e) => {
-              const nt = { ...(activeCourse.lessonTemplates || {}) };
-              nt[activeTab] = e.target.value;
-              updateActiveCourse({ lessonTemplates: nt });
-            }}
-            className="w-full h-32 bg-slate-50 border border-slate-100 rounded-2xl p-6 text-sm text-slate-600 outline-none focus:ring-2 focus:ring-indigo-500 transition-all resize-none"
-          />
-          <p className="mt-3 text-[10px] font-medium text-slate-400 italic font-bold">
-            * Hệ thống sẽ tự động chọn mẫu giáo án phù hợp dựa trên số giờ LT/TH trong đề cương môn học.
-          </p>
+          <div>
+            <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight">Cấu hình soạn bài linh hoạt</h3>
+            <p className="text-xs text-slate-500 font-medium">Hệ thống đã tự động chia nhỏ buổi học thành các module hơp lý (không quá 45 phút/phần). AI sẽ tập trung soạn nội dung hoạt động cho Thầy/Cô.</p>
+          </div>
         </div>
       </div>
 
@@ -516,53 +465,8 @@ export default function Step5Execution({ aiConfig }) {
             {activeCourse.schedule.map((session, idx) => {
               const safeContents = session.contents || [];
               const uniqueLessons = Array.from(new Set(safeContents.map(c => c.lessonName)));
-              
-              const processedContents = safeContents.map(c => {
-                const name = (c.subItem || "").toLowerCase();
-                let type = c.type || 'Lý thuyết';
-                
-                const isExam = name.includes("kiểm tra") || name.includes("thi") || name.includes("test") || name.includes("quiz");
-                if (isExam) {
-                  type = 'Thực hành';
-                }
-                return { ...c, type };
-              });
-
-              const totalLT  = (session.contents || []).reduce((sum, c) => sum + (Number(c.gioLT_used)  || 0), 0);
-              const totalTH  = (session.contents || []).reduce((sum, c) => sum + (Number(c.gioTH_used)  || 0), 0);
-              const totalKT  = (session.contents || []).reduce((sum, c) => sum + (Number(c.gioKT_used)  || 0) + (Number(c.gioKLT_used) || 0) + (Number(c.gioKTH_used) || 0), 0);
-              const totalThi = (session.contents || []).reduce((sum, c) => sum + (Number(c.gioThi_used) || 0) + (Number(c.gioTLT_used) || 0) + (Number(c.gioTTH_used) || 0), 0);
-
-              // --- PHÂN LOẠI BUỔI HỌC: Ư U TIÊN TỐI ĐA THI → KT → BÌNH THƯỜNG ---
-              let sessionType = 'LÝ THUYẾT';
-              let badgeColor  = 'bg-blue-600';
-
-              if (totalThi > 0) {
-                // Cấp 1: Buổi Thi
-                badgeColor  = 'bg-red-600';
-                if (totalLT > 0 && totalTH === 0)      sessionType = 'THI LÝ THUYẾT';
-                else if (totalTH > 0 && totalLT === 0) sessionType = 'THI THỰC HÀNH';
-                else if (totalLT > 0 && totalTH > 0)   sessionType = 'THI TÍCH HỢP';
-                else                                   sessionType = 'THI';
-              } else if (totalKT > 0) {
-                // Cấp 2: Kiểm tra
-                badgeColor  = 'bg-orange-500';
-                if (totalLT > 0 && totalTH === 0)      sessionType = 'KT LÝ THUYẾT';
-                else if (totalTH > 0 && totalLT === 0) sessionType = 'KT THỰC HÀNH';
-                else                                   sessionType = 'KIỂM TRA';
-              } else {
-                // Cấp 3: Buổi học bình thường
-                if (totalTH > 0 && totalLT === 0) {
-                  sessionType = 'THỰC HÀNH';
-                  badgeColor  = 'bg-emerald-600';
-                } else if (totalTH > 0 && totalLT > 0) {
-                  sessionType = 'TÍCH HỢP';
-                  badgeColor  = 'bg-indigo-600';
-                } else {
-                  sessionType = 'LÝ THUYẾT';
-                  badgeColor  = 'bg-blue-600';
-                }
-              }
+              const sessionType = 'CHƯƠNG TRÌNH';
+              const badgeColor = 'bg-blue-600';
 
               return (
                 <div 
@@ -579,9 +483,6 @@ export default function Step5Execution({ aiConfig }) {
                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">{session.date ? new Date(session.date + 'T00:00:00').toLocaleDateString('vi-VN') : '---'}</p>
                        <div className="flex items-center gap-2">
                          <p className="text-xs font-black text-slate-900 uppercase">Buổi {idx + 1}</p>
-                         <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full text-white ${badgeColor}`}>
-                             {sessionType}
-                         </span>
                        </div>
                      </div>
                      <div className={`p-2 rounded-xl transition-colors ${
@@ -607,18 +508,13 @@ export default function Step5Execution({ aiConfig }) {
                     
                     <div className="space-y-1.5 font-bold">
                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Nội dung buổi học:</p>
-                       {processedContents.map((c, i) => (
+                       {safeContents.map((c, i) => (
                          <div key={i} className="flex items-center justify-between gap-2 p-1.5 bg-slate-50 rounded-lg border border-slate-100">
                            <span className="text-[9px] font-bold text-slate-600 truncate max-w-[120px]">
                              • {c.subItem}
                            </span>
-                           <span className={`text-[8px] font-black uppercase whitespace-nowrap px-1.5 py-0.5 rounded border ${
-                             (c.gioTH_used > 0 || c.subItem?.toLowerCase().includes("kiểm tra")) ? 'bg-amber-50 border-amber-100 text-amber-500' : 'bg-white border-slate-100 text-indigo-400'
-                           }`}>
-                             {c.gioLT_used > 0 && c.gioTH_used > 0 ? `${c.gioLT_used}LT+${c.gioTH_used}TH` : 
-                              c.gioLT_used > 0 ? `${c.gioLT_used}h LT` : 
-                              c.gioTH_used > 0 ? `${c.gioTH_used}h TH` : 
-                              (c.subItem?.toLowerCase().includes("kiểm tra") || c.subItem?.toLowerCase().includes("thi")) ? "45P (KT)" : "GĐ"}
+                           <span className={`text-[8px] font-black uppercase whitespace-nowrap px-1.5 py-0.5 rounded border bg-white border-slate-100 text-indigo-400`}>
+                             {c.allocatedMinutes}P
                            </span>
                          </div>
                        ))}
@@ -628,8 +524,8 @@ export default function Step5Execution({ aiConfig }) {
                   <div className="mt-auto pt-4 border-t border-slate-100 flex items-center justify-between">
                      <div className="flex flex-col gap-1">
                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-1">{session.totalPeriods || 4} TIẾT (180P)</span>
-                       <div className={`text-[9px] font-black uppercase px-2 py-1 rounded-lg text-white transition-all ${badgeColor}`}>
-                         {sessionType}
+                       <div className={`text-[9px] font-black uppercase px-2 py-1 rounded-lg text-white transition-all bg-indigo-500`}>
+                         NỘI DUNG
                        </div>
                      </div>
                      {loading && previewSession?.id === session.id ? (
@@ -658,7 +554,22 @@ export default function Step5Execution({ aiConfig }) {
           onClose={() => setPreviewSession(null)}
           session={
             isStreaming && currentSessionId === previewSession.id && object
-              ? { ...previewSession, generatedLesson: { lessonRows: object.lessonRows, muc_tieu: object.muc_tieu }, status: 'generating' }
+              ? { 
+                  ...previewSession, 
+                  generatedLesson: { 
+                    ...previewSession.generatedLesson,
+                    // LIVE PREVIEW: Chi update GV/HS tu AI, giu nguyen tat ca cac truong khac tu skeleton
+                    lessonRows: (skeletonRef.length > 0 ? skeletonRef : (previewSession.generatedLesson?.lessonRows || [])).map((skelRow, i) => {
+                      const aiRow = object?.lessonRows?.[i];
+                      return {
+                        ...skelRow,
+                        teacherAct: aiRow?.hoatDongGV || skelRow.teacherAct || "",
+                        studentAct: aiRow?.hoatDongHS || skelRow.studentAct || "",
+                      };
+                    })
+                  }, 
+                  status: 'generating' 
+                }
               : (finalData && currentSessionId === previewSession.id)
                 ? { ...previewSession, generatedLesson: finalData, status: 'completed' }
                 : previewSession

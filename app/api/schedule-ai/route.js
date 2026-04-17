@@ -25,7 +25,12 @@ export async function POST(req) {
         let totalRequired = 0;
         syllabus.forEach(item => {
           const hLt = parseFloat(item.gioLT) || 0;
-          const others = (parseFloat(item.gioTH) || 0) + (parseFloat(item.gioKLT) || 0) + (parseFloat(item.gioKTH) || 0) + (parseFloat(item.gioTLT) || 0) + (parseFloat(item.gioTTH) || 0) + (parseFloat(item.gioKT) || 0) + (parseFloat(item.gioThi) || 0);
+          // Fix lỗi 4: Dùng đúng tên field từ SyllabusPreviewTable (gioKLT, gioKTH, gioTLT, gioTTH)
+          const others = (parseFloat(item.gioTH) || 0) 
+            + (parseFloat(item.gioKLT) || 0) 
+            + (parseFloat(item.gioKTH) || 0) 
+            + (parseFloat(item.gioTLT) || 0) 
+            + (parseFloat(item.gioTTH) || 0);
           totalRequired += hLt + (others * 60 / 45);
         });
         const totalPeriodsNeeded = Math.ceil(totalRequired);
@@ -49,8 +54,9 @@ export async function POST(req) {
        tenBai: item.tenBai,
        gioLT: item.gioLT,
        gioTH: item.gioTH,
-       gioKT: item.gioKT,
-       gioThi: item.gioThi
+       // Fix lỗi 4: Gộp KT = KLT + KTH, Thi = TLT + TTH
+       gioKT: ((parseFloat(item.gioKLT) || 0) + (parseFloat(item.gioKTH) || 0)),
+       gioThi: ((parseFloat(item.gioTLT) || 0) + (parseFloat(item.gioTTH) || 0)),
     }));
 
     const result = await generateObject({
